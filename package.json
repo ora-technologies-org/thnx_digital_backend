@@ -11,7 +11,7 @@
     "prisma:studio": "prisma studio"
   },
   "dependencies": {
-    "@prisma/client": "^7.1.0",
+    "@prisma/client": "^5.22.0",
     "bcrypt": "^5.1.1",
     "cors": "^2.8.5",
     "dotenv": "^16.3.1",
@@ -38,7 +38,7 @@
     "@types/passport-google-oauth20": "^2.0.17",
     "@types/qrcode": "^1.5.6",
     "nodemon": "^3.1.11",
-    "prisma": "^7.1.0",
+    "prisma": "^5.22.0",
     "ts-node": "^10.9.2",
     "typescript": "^5.9.3"
   }
