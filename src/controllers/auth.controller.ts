@@ -70,6 +70,16 @@ export const merchantRegister = async (req: Request, res: Response) => {
       return newUser;
     });
 
+
+       // Send welcome email with credentials
+    await sendWelcomeEmail(
+      user.email,
+      user.name || 'Merchant',
+      validatedData.password, // Send original password (before hashing)
+      validatedData.businessName
+    );
+    
+
     const tokens = generateTokens({
       userId: user.id,
       email: user.email,
@@ -634,6 +644,7 @@ export const adminCreateMerchant = async (req: Request, res: Response) => {
       return newUser;
     });
 
+
        // Send welcome email with credentials
     await sendWelcomeEmail(
       user.email,
@@ -641,6 +652,7 @@ export const adminCreateMerchant = async (req: Request, res: Response) => {
       validatedData.password, // Send original password (before hashing)
       validatedData.businessName
     );
+
 
     return res.status(201).json({
       success: true,
