@@ -203,8 +203,7 @@ export const resubmitProfile = async (req: Request, res: Response) => {
         registrationDocument: documentData.registrationDocument,
         taxDocument: documentData.taxDocument,
         identityDocument: documentData.identityDocument,
-        additionalDocuments: documentData.additionalDocuments,
-
+additionalDocuments: documentData.additionalDocuments ?? undefined,
         // Clear rejection info and update status
         profileStatus: 'PENDING_VERIFICATION',
         rejectionReason: null,
