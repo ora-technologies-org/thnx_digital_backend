@@ -803,3 +803,45 @@ export const verifyMerchant = async (req: Request, res: Response) => {
     });
   }
 };
+
+/**
+ * @route   GET /api/auth/admin/merchants
+ * @desc    Get all merchants
+ * @access  Admin only
+ */
+export const getAllMerchants = async (req: Request, res: Response) => {
+  try {
+    const merchants = await prisma.merchantProfile.findMany({
+      include: {
+        user: {
+          select: {
+            id: true,
+            email: true,
+            name: true,
+            phone: true,
+            createdAt: true,
+            isActive: true,
+          },
+        },
+      },
+      orderBy: {
+        createdAt: 'desc',
+      },
+    });
+
+    return res.status(200).json({
+      success: true,
+      data: {
+        merchants,
+        count: merchants.length,
+      },
+    });
+  } catch (error: any) {
+    console.error('Get all merchants error:', error);
+    return res.status(500).json({
+      success: false,
+      message: 'Error fetching merchants',
+      error: error.message,
+    });
+  }
+};
