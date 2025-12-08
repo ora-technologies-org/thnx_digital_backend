@@ -1,13 +1,17 @@
 import nodemailer from 'nodemailer';
 
-// Configure your email service
-const transporter = nodemailer.createTransport({
-  service: 'gmail',
-  auth: {
-    user: process.env.EMAIL_USER,
-    pass: process.env.EMAIL_PASSWORD,
-  },
-});
+// Configure email transporter
+const createTransporter = () => {
+  return nodemailer.createTransport({
+    host: process.env.SMTP_HOST,
+    port: parseInt(process.env.SMTP_PORT || '465'),
+    secure: true, // true for port 465 (SSL)
+    auth: {
+      user: process.env.SMTP_USER,
+      pass: process.env.SMTP_PASS,
+    },
+  });
+};
 
 export const sendGiftCardEmail = async (
   to: string,
@@ -15,18 +19,25 @@ export const sendGiftCardEmail = async (
   qrCodeImage: string
 ) => {
   try {
-    // Convert base64 to buffer
+    if (!process.env.SMTP_USER || !process.env.SMTP_PASS) {
+      console.log('Email not configured, skipping email send to:', to);
+      return;
+    }
+
+    const transporter = createTransporter();
+
     const base64Data = qrCodeImage.replace(/^data:image\/png;base64,/, '');
     const imageBuffer = Buffer.from(base64Data, 'base64');
 
-    // Safely get merchant business name
     const businessName = 
       purchaseData.giftCard?.merchant?.merchantProfile?.businessName || 
       purchaseData.giftCard?.merchant?.name || 
       'Merchant';
 
+    const appUrl = process.env.FRONTEND_URL || 'https://thnxdigital.com';
+
     const mailOptions = {
-      from: process.env.EMAIL_USER,
+      from: `"THNX Digital" <${process.env.SMTP_USER}>`,
       to,
       subject: `Your Gift Card - ${purchaseData.giftCard?.title || 'Gift Card'}`,
       html: `
@@ -64,17 +75,14 @@ export const sendGiftCardEmail = async (
           
           <div style="margin-top: 20px; padding: 15px; background-color: #e7f3ff; border-radius: 5px; border-left: 4px solid #2196F3;">
             <p style="margin: 0; color: #0c5460; font-size: 14px;">
-              <strong>💡 Tip:</strong> You can check your balance anytime at:<br>
-              <a href="${process.env.APP_URL}/verify/${purchaseData.qrCode}" 
-                 style="color: #2196F3; text-decoration: none;">
-                ${process.env.APP_URL}/verify/${purchaseData.qrCode}
-              </a>
+              <strong>💡 Tip:</strong> Check your balance anytime at:<br>
+              <a href="${appUrl}/verify/${purchaseData.qrCode}">${appUrl}/verify/${purchaseData.qrCode}</a>
             </p>
           </div>
           
           <p style="margin-top: 30px; color: #666; font-size: 12px; text-align: center; border-top: 1px solid #ddd; padding-top: 15px;">
-            Keep this email safe. The QR code updates automatically when you use it.<br>
-            Questions? Contact ${businessName} at ${purchaseData.giftCard?.merchant?.merchantProfile?.businessPhone || 'N/A'}
+            Keep this email safe.<br>
+            Questions? Contact ${businessName}
           </p>
         </div>
       `,
@@ -91,6 +99,5 @@ export const sendGiftCardEmail = async (
     console.log('Gift card email sent successfully to:', to);
   } catch (error) {
     console.error('Email sending error:', error);
-    throw error;
   }
 };
