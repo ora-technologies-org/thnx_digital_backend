@@ -11,6 +11,7 @@ import {
   verifyMerchant,
   getPendingMerchants,
   completeProfile,
+  getAllMerchants,
 } from '../controllers/auth.controller';
 import { authenticate, authorize } from '../middleware/auth.middleware';
 import { uploadMerchantDocs } from '../utils/multer';
@@ -71,11 +72,6 @@ router.get('/me', authenticate, getCurrentUser);
 
 // ==================== Admin Routes ====================
 
-/**
- * @route   POST /api/auth/admin/create-merchant
- * @desc    Admin creates a merchant (auto-verified)
- * @access  Admin only
- */
 router.post(
   '/admin/create-merchant',
   authenticate,
@@ -83,11 +79,14 @@ router.post(
   adminCreateMerchant
 );
 
-/**
- * @route   GET /api/auth/admin/merchants/pending
- * @desc    Get all pending merchant verifications
- * @access  Admin only
- */
+// ADD THIS NEW ROUTE (before /pending)
+router.get(
+  '/admin/merchants',
+  authenticate,
+  authorize('ADMIN'),
+  getAllMerchants
+);
+
 router.get(
   '/admin/merchants/pending',
   authenticate,
@@ -95,11 +94,6 @@ router.get(
   getPendingMerchants
 );
 
-/**
- * @route   POST /api/auth/admin/merchants/:merchantId/verify
- * @desc    Admin verify/reject merchant
- * @access  Admin only
- */
 router.post(
   '/admin/merchants/:merchantId/verify',
   authenticate,
