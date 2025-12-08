@@ -1,11 +1,16 @@
+import { Role } from '@prisma/client';
+
 declare global {
   namespace Express {
     interface User {
-      userId: string;
+      id: string;
       email: string;
-      role: string;
-      isVerified: boolean;
-      profileStatus?: string;
+      role: Role;
+      isActive: boolean;
+      emailVerified: boolean;
+      name: string;
+      phone?: string | null;
+      avatar?: string | null;
     }
   }
 }

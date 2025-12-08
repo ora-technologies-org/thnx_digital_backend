@@ -1,5 +1,3 @@
-
-
 import { Request, Response } from 'express';
 import prisma from '../utils/prisma.util';
 import { completeProfileSchema } from '../validators/auth.validator';
@@ -11,7 +9,7 @@ import { completeProfileSchema } from '../validators/auth.validator';
  */
 export const getMerchantProfile = async (req: Request, res: Response) => {
   try {
-    const userId = req.user?.userId;
+    const userId = req.user?.id;
 
     if (!userId) {
       return res.status(401).json({
@@ -112,7 +110,7 @@ export const getMerchantProfile = async (req: Request, res: Response) => {
  */
 export const resubmitProfile = async (req: Request, res: Response) => {
   try {
-    const userId = req.user?.userId;
+    const userId = req.user?.id;
     const files = req.files as { [fieldname: string]: Express.Multer.File[] };
 
     if (!userId) {
@@ -203,7 +201,8 @@ export const resubmitProfile = async (req: Request, res: Response) => {
         registrationDocument: documentData.registrationDocument,
         taxDocument: documentData.taxDocument,
         identityDocument: documentData.identityDocument,
-additionalDocuments: documentData.additionalDocuments ?? undefined,
+        additionalDocuments: documentData.additionalDocuments ?? undefined,
+
         // Clear rejection info and update status
         profileStatus: 'PENDING_VERIFICATION',
         rejectionReason: null,
@@ -225,9 +224,6 @@ additionalDocuments: documentData.additionalDocuments ?? undefined,
         },
       },
     });
-
-    // TODO: Send notification to admin about resubmission
-    // TODO: Send email to merchant confirming resubmission
 
     return res.status(200).json({
       success: true,
@@ -262,7 +258,7 @@ additionalDocuments: documentData.additionalDocuments ?? undefined,
  */
 export const updateMerchantProfile = async (req: Request, res: Response) => {
   try {
-    const userId = req.user?.userId;
+    const userId = req.user?.id;
 
     if (!userId) {
       return res.status(401).json({

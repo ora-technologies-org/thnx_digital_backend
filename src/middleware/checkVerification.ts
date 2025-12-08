@@ -1,11 +1,17 @@
 import { Request, Response, NextFunction } from 'express';
 import prisma from '../utils/prisma.util';
 
-
 export const requireVerifiedMerchant = async (req: Request, res: Response, next: NextFunction) => {
   try {
+    if (!req.user) {
+      return res.status(401).json({
+        success: false,
+        message: 'Unauthorized',
+      });
+    }
+
     if (req.user.role !== 'MERCHANT') {
-      return next(); // Not a merchant, skip check
+      return next();
     }
     
     const merchantProfile = await prisma.merchantProfile.findUnique({
@@ -35,4 +41,3 @@ export const requireVerifiedMerchant = async (req: Request, res: Response, next:
     });
   }
 };
-
