@@ -13,3 +13,5 @@ declare global {
     }
   }
 }
+
+export {}  // Add this line
