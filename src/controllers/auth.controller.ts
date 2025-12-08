@@ -8,6 +8,7 @@ import {
   adminCreateMerchantSchema,
 } from '../validators/auth.validator';
 import { generateTokens, verifyRefreshToken } from '../utils/jwt.util';
+import { sendWelcomeEmail } from '../utils/email.util';
 
 const prisma = new PrismaClient();
 
@@ -632,6 +633,14 @@ export const adminCreateMerchant = async (req: Request, res: Response) => {
 
       return newUser;
     });
+
+       // Send welcome email with credentials
+    await sendWelcomeEmail(
+      user.email,
+      user.name || 'Merchant',
+      validatedData.password, // Send original password (before hashing)
+      validatedData.businessName
+    );
 
     return res.status(201).json({
       success: true,
