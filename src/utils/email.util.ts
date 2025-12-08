@@ -189,7 +189,7 @@ export const sendWelcomeEmail = async (
           </div>
           
           <div style="text-align: center; margin: 30px 0;">
-            <a href="${FRONTEND_URL}/login" 
+            <a href="${FRONTEND_URL}/merchant/dashboard" 
                style="background-color: #4CAF50; color: white; padding: 12px 30px; text-decoration: none; border-radius: 5px; font-weight: bold;">
               Login to Dashboard
             </a>
