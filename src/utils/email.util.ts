@@ -4,7 +4,7 @@ import { Resend } from 'resend';
 
 // Hardcoding the API Key and Frontend URL for now
 const RESEND_API_KEY = 're_iyEKPAa3_F83kdokpirXWGTUGZfEg3k8J';
-const FRONTEND_URL = 'https://thnxdigital.com';
+const FRONTEND_URL = 'http://thnxdigital.com';
 
 const resend = new Resend(RESEND_API_KEY);
 
