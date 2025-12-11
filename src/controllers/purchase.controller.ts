@@ -1,14 +1,15 @@
-
-
-import { Request, Response } from 'express';
-import { purchaseGiftCardSchema, redeemGiftCardSchema } from '../validators/purchase.validator';
-import prisma from '../utils/prisma.util';
-import { Decimal } from '@prisma/client/runtime/library';
-import { 
-  generateQRCodeString, 
-  generateQRCodeImage, 
-} from '../utils/qrcode.util';
-import { sendGiftCardEmail } from '../utils/email.util';
+import { Request, Response } from "express";
+import {
+  purchaseGiftCardSchema,
+  redeemGiftCardSchema,
+} from "../validators/purchase.validator";
+import prisma from "../utils/prisma.util";
+import { Decimal } from "@prisma/client/runtime/library";
+import {
+  generateQRCodeString,
+  generateQRCodeImage,
+} from "../utils/qrcode.util";
+import { sendGiftCardEmail } from "../utils/email.util";
 
 // Define authenticated request interface
 interface AuthenticatedRequest extends Request {
@@ -20,147 +21,6 @@ interface AuthenticatedRequest extends Request {
     profileStatus?: string;
   };
 }
-
-/**
- * Purchase a gift card (No login required)
- * @route POST /api/purchases/gift-cards/:giftCardId
- * @access Public
- */
-// export const purchaseGiftCard = async (req: Request, res: Response) => {
-//   try {
-//     const { giftCardId } = req.params;
-
-//     // Validate request body
-//     const validatedData = purchaseGiftCardSchema.parse(req.body);
-
-//     // Check if gift card exists and is active
-//     const giftCard = await prisma.giftCard.findUnique({
-//       where: { id: giftCardId },
-//       include: {
-//         merchant: {
-//           include: {
-//             merchantProfile: true,
-//           },
-//         },
-//       },
-//     });
-
-//     if (!giftCard) {
-//       return res.status(404).json({
-//         success: false,
-//         message: 'Gift card not found',
-//       });
-//     }
-
-//     if (!giftCard.isActive) {
-//       return res.status(400).json({
-//         success: false,
-//         message: 'This gift card is no longer available',
-//       });
-//     }
-
-//     // Check if gift card is expired
-//     if (new Date() > giftCard.expiryDate) {
-//       return res.status(400).json({
-//         success: false,
-//         message: 'This gift card has expired',
-//       });
-//     }
-
-//     // Generate unique QR code with Thnx-Digital prefix
-//     const qrCode = generateQRCodeString();
-
-//     // Create purchased gift card
-//     const purchasedCard = await prisma.purchasedGiftCard.create({
-//       data: {
-//         giftCardId: giftCard.id,
-//         qrCode,
-//         customerName: validatedData.customerName,
-//         customerEmail: validatedData.customerEmail,
-//         customerPhone: validatedData.customerPhone,
-//         purchaseAmount: giftCard.price,
-//         currentBalance: giftCard.price,
-//         expiresAt: giftCard.expiryDate,
-//         paymentMethod: validatedData.paymentMethod,
-//         transactionId: validatedData.transactionId,
-//         paymentStatus: validatedData.transactionId ? 'COMPLETED' : 'PENDING',
-//       },
-//       include: {
-//         giftCard: {
-//           include: {
-//             merchant: {
-//               include: {
-//                 merchantProfile: true,
-//               },
-//             },
-//           },
-//         },
-//       },
-//     });
-
-//     // Generate QR code image with all gift card data
-//     const qrCodeData = createQRCodeData(purchasedCard);
-//     const qrCodeImage = await generateQRCodeImage(JSON.stringify(qrCodeData));
-
-//     // Send email with gift card (continue even if email fails)
-//     try {
-//       await sendGiftCardEmail(
-//         purchasedCard.customerEmail,
-//         purchasedCard,
-//         qrCodeImage
-//       );
-//     } catch (emailError) {
-//       console.error('Failed to send email:', emailError);
-//       // Continue - user still gets the response
-//     }
-
-//     return res.status(201).json({
-//       success: true,
-//       message: 'Gift card purchased successfully! Check your email for details.',
-//       data: {
-//         purchase: {
-//           id: purchasedCard.id,
-//           qrCode: purchasedCard.qrCode,
-//           qrCodeImage, // Base64 image for immediate display
-//           customerName: purchasedCard.customerName,
-//           customerEmail: purchasedCard.customerEmail,
-//           purchaseAmount: purchasedCard.purchaseAmount.toString(),
-//           currentBalance: purchasedCard.currentBalance.toString(),
-//           status: purchasedCard.status,
-//           purchasedAt: purchasedCard.purchasedAt,
-//           expiresAt: purchasedCard.expiresAt,
-//           giftCard: {
-//             id: giftCard.id,
-//             title: giftCard.title,
-//             description: giftCard.description,
-//           },
-//           merchant: {
-//             businessName: giftCard.merchant.merchantProfile?.businessName || giftCard.merchant.name,
-//             city: giftCard.merchant.merchantProfile?.city,
-//             country: giftCard.merchant.merchantProfile?.country,
-//           },
-//         },
-//       },
-//     });
-//   } catch (error: any) {
-//     console.error('Purchase gift card error:', error);
-
-//     if (error.name === 'ZodError') {
-//       return res.status(400).json({
-//         success: false,
-//         message: 'Validation error',
-//         errors: error.errors,
-//       });
-//     }
-
-//     return res.status(500).json({
-//       success: false,
-//       message: 'Internal server error',
-//       error: error.message,
-//     });
-//   }
-// };
-
 
 export const purchaseGiftCard = async (req: Request, res: Response) => {
   try {
@@ -184,14 +44,14 @@ export const purchaseGiftCard = async (req: Request, res: Response) => {
     if (!giftCard) {
       return res.status(404).json({
         success: false,
-        message: 'Gift card not found',
+        message: "Gift card not found",
       });
     }
 
     if (!giftCard.isActive) {
       return res.status(400).json({
         success: false,
-        message: 'This gift card is no longer available',
+        message: "This gift card is no longer available",
       });
     }
 
@@ -199,7 +59,7 @@ export const purchaseGiftCard = async (req: Request, res: Response) => {
     if (new Date() > giftCard.expiryDate) {
       return res.status(400).json({
         success: false,
-        message: 'This gift card has expired',
+        message: "This gift card has expired",
       });
     }
 
@@ -219,7 +79,7 @@ export const purchaseGiftCard = async (req: Request, res: Response) => {
         expiresAt: giftCard.expiryDate,
         paymentMethod: validatedData.paymentMethod,
         transactionId: validatedData.transactionId,
-        paymentStatus: validatedData.transactionId ? 'COMPLETED' : 'PENDING',
+        paymentStatus: validatedData.transactionId ? "COMPLETED" : "PENDING",
       },
       include: {
         giftCard: {
@@ -243,16 +103,17 @@ export const purchaseGiftCard = async (req: Request, res: Response) => {
       await sendGiftCardEmail(
         purchasedCard.customerEmail,
         purchasedCard,
-        qrCodeImage
+        qrCodeImage,
       );
     } catch (emailError) {
-      console.error('Failed to send email:', emailError);
+      console.error("Failed to send email:", emailError);
       // Continue - user still gets the response
     }
 
     return res.status(201).json({
       success: true,
-      message: 'Gift card purchased successfully! Check your email for details.',
+      message:
+        "Gift card purchased successfully! Check your email for details.",
       data: {
         purchase: {
           id: purchasedCard.id,
@@ -271,7 +132,9 @@ export const purchaseGiftCard = async (req: Request, res: Response) => {
             description: giftCard.description,
           },
           merchant: {
-            businessName: giftCard.merchant.merchantProfile?.businessName || giftCard.merchant.name,
+            businessName:
+              giftCard.merchant.merchantProfile?.businessName ||
+              giftCard.merchant.name,
             city: giftCard.merchant.merchantProfile?.city,
             country: giftCard.merchant.merchantProfile?.country,
           },
@@ -279,19 +142,19 @@ export const purchaseGiftCard = async (req: Request, res: Response) => {
       },
     });
   } catch (error: any) {
-    console.error('Purchase gift card error:', error);
+    console.error("Purchase gift card error:", error);
 
-    if (error.name === 'ZodError') {
+    if (error.name === "ZodError") {
       return res.status(400).json({
         success: false,
-        message: 'Validation error',
+        message: "Validation error",
         errors: error.errors,
       });
     }
 
     return res.status(500).json({
       success: false,
-      message: 'Internal server error',
+      message: "Internal server error",
       error: error.message,
     });
   }
@@ -318,7 +181,7 @@ export const getGiftCardByQR = async (req: Request, res: Response) => {
           },
         },
         redemptions: {
-          orderBy: { redeemedAt: 'desc' },
+          orderBy: { redeemedAt: "desc" },
           take: 10, // Last 10 redemptions
           include: {
             redeemedBy: {
@@ -335,24 +198,24 @@ export const getGiftCardByQR = async (req: Request, res: Response) => {
     if (!purchasedCard) {
       return res.status(404).json({
         success: false,
-        message: 'Gift card not found',
+        message: "Gift card not found",
       });
     }
 
     // Auto-update status if expired
     let status = purchasedCard.status;
-    if (new Date() > purchasedCard.expiresAt && status === 'ACTIVE') {
-      status = 'EXPIRED';
+    if (new Date() > purchasedCard.expiresAt && status === "ACTIVE") {
+      status = "EXPIRED";
       await prisma.purchasedGiftCard.update({
         where: { id: purchasedCard.id },
-        data: { status: 'EXPIRED' },
+        data: { status: "EXPIRED" },
       });
     }
 
     // Calculate total redeemed amount
     const totalRedeemed = purchasedCard.redemptions.reduce(
       (sum, r) => sum + r.amount.toNumber(),
-      0
+      0,
     );
 
     return res.status(200).json({
@@ -377,9 +240,11 @@ export const getGiftCardByQR = async (req: Request, res: Response) => {
             description: purchasedCard.giftCard.description,
           },
           merchant: {
-            businessName: purchasedCard.giftCard.merchant.merchantProfile?.businessName || 
-                          purchasedCard.giftCard.merchant.name,
-            businessPhone: purchasedCard.giftCard.merchant.merchantProfile?.businessPhone,
+            businessName:
+              purchasedCard.giftCard.merchant.merchantProfile?.businessName ||
+              purchasedCard.giftCard.merchant.name,
+            businessPhone:
+              purchasedCard.giftCard.merchant.merchantProfile?.businessPhone,
             address: purchasedCard.giftCard.merchant.merchantProfile?.address,
             city: purchasedCard.giftCard.merchant.merchantProfile?.city,
           },
@@ -389,11 +254,11 @@ export const getGiftCardByQR = async (req: Request, res: Response) => {
       },
     });
   } catch (error: any) {
-    console.error('Get gift card by QR error:', error);
+    console.error("Get gift card by QR error:", error);
 
     return res.status(500).json({
       success: false,
-      message: 'Internal server error',
+      message: "Internal server error",
       error: error.message,
     });
   }
@@ -412,7 +277,7 @@ export const redeemGiftCard = async (req: Request, res: Response) => {
     if (!merchantId) {
       return res.status(401).json({
         success: false,
-        message: 'Unauthorized',
+        message: "Unauthorized",
       });
     }
 
@@ -434,7 +299,7 @@ export const redeemGiftCard = async (req: Request, res: Response) => {
     if (!purchasedCard) {
       return res.status(404).json({
         success: false,
-        message: 'Invalid QR code',
+        message: "Invalid QR code",
       });
     }
 
@@ -442,7 +307,7 @@ export const redeemGiftCard = async (req: Request, res: Response) => {
     if (purchasedCard.giftCard.merchantId !== merchantId) {
       return res.status(403).json({
         success: false,
-        message: 'This gift card does not belong to your business',
+        message: "This gift card does not belong to your business",
       });
     }
 
@@ -450,16 +315,16 @@ export const redeemGiftCard = async (req: Request, res: Response) => {
     if (new Date() > purchasedCard.expiresAt) {
       return res.status(400).json({
         success: false,
-        message: 'This gift card has expired',
+        message: "This gift card has expired",
         expiresAt: purchasedCard.expiresAt,
       });
     }
 
     // Check status
-    if (purchasedCard.status !== 'ACTIVE') {
+    if (purchasedCard.status !== "ACTIVE") {
       return res.status(400).json({
         success: false,
-        message: `Gift card is ${purchasedCard.status.toLowerCase().replace('_', ' ')}`,
+        message: `Gift card is ${purchasedCard.status.toLowerCase().replace("_", " ")}`,
         status: purchasedCard.status,
       });
     }
@@ -512,7 +377,7 @@ export const redeemGiftCard = async (req: Request, res: Response) => {
 
       // If balance is zero, mark as fully redeemed
       if (newBalance === 0) {
-        updateData.status = 'FULLY_REDEEMED';
+        updateData.status = "FULLY_REDEEMED";
       }
 
       const updatedCard = await tx.purchasedGiftCard.update({
@@ -525,9 +390,10 @@ export const redeemGiftCard = async (req: Request, res: Response) => {
 
     return res.status(200).json({
       success: true,
-      message: newBalance === 0 
-        ? 'Gift card fully redeemed!' 
-        : 'Gift card redeemed successfully',
+      message:
+        newBalance === 0
+          ? "Gift card fully redeemed!"
+          : "Gift card redeemed successfully",
       data: {
         redemption: {
           id: result.redemption.id,
@@ -544,19 +410,19 @@ export const redeemGiftCard = async (req: Request, res: Response) => {
       },
     });
   } catch (error: any) {
-    console.error('Redeem gift card error:', error);
+    console.error("Redeem gift card error:", error);
 
-    if (error.name === 'ZodError') {
+    if (error.name === "ZodError") {
       return res.status(400).json({
         success: false,
-        message: 'Validation error',
+        message: "Validation error",
         errors: error.errors,
       });
     }
 
     return res.status(500).json({
       success: false,
-      message: 'Internal server error',
+      message: "Internal server error",
       error: error.message,
     });
   }
@@ -575,7 +441,7 @@ export const getRedemptionHistory = async (req: Request, res: Response) => {
     if (!merchantId) {
       return res.status(401).json({
         success: false,
-        message: 'Unauthorized',
+        message: "Unauthorized",
       });
     }
 
@@ -611,7 +477,7 @@ export const getRedemptionHistory = async (req: Request, res: Response) => {
             },
           },
         },
-        orderBy: { redeemedAt: 'desc' },
+        orderBy: { redeemedAt: "desc" },
         take: limit,
         skip,
       }),
@@ -629,7 +495,7 @@ export const getRedemptionHistory = async (req: Request, res: Response) => {
     // Calculate total revenue from redemptions
     const totalRevenue = redemptions.reduce(
       (sum, r) => sum + r.amount.toNumber(),
-      0
+      0,
     );
 
     return res.status(200).json({
@@ -649,11 +515,11 @@ export const getRedemptionHistory = async (req: Request, res: Response) => {
       },
     });
   } catch (error: any) {
-    console.error('Get redemption history error:', error);
+    console.error("Get redemption history error:", error);
 
     return res.status(500).json({
       success: false,
-      message: 'Internal server error',
+      message: "Internal server error",
       error: error.message,
     });
   }
@@ -669,10 +535,10 @@ export const getCustomerPurchases = async (req: Request, res: Response) => {
     const { email } = req.params;
 
     // Basic email validation
-    if (!email || !email.includes('@')) {
+    if (!email || !email.includes("@")) {
       return res.status(400).json({
         success: false,
-        message: 'Invalid email address',
+        message: "Invalid email address",
       });
     }
 
@@ -696,7 +562,7 @@ export const getCustomerPurchases = async (req: Request, res: Response) => {
           },
         },
         redemptions: {
-          orderBy: { redeemedAt: 'desc' },
+          orderBy: { redeemedAt: "desc" },
           take: 5, // Last 5 redemptions per card
         },
         _count: {
@@ -705,19 +571,23 @@ export const getCustomerPurchases = async (req: Request, res: Response) => {
           },
         },
       },
-      orderBy: { purchasedAt: 'desc' },
+      orderBy: { purchasedAt: "desc" },
     });
 
     // Calculate totals
     const stats = {
       totalPurchased: purchases.length,
-      totalSpent: purchases.reduce((sum, p) => sum + p.purchaseAmount.toNumber(), 0),
+      totalSpent: purchases.reduce(
+        (sum, p) => sum + p.purchaseAmount.toNumber(),
+        0,
+      ),
       totalBalance: purchases
-        .filter(p => p.status === 'ACTIVE')
+        .filter((p) => p.status === "ACTIVE")
         .reduce((sum, p) => sum + p.currentBalance.toNumber(), 0),
-      activeCards: purchases.filter(p => p.status === 'ACTIVE').length,
-      expiredCards: purchases.filter(p => p.status === 'EXPIRED').length,
-      fullyRedeemedCards: purchases.filter(p => p.status === 'FULLY_REDEEMED').length,
+      activeCards: purchases.filter((p) => p.status === "ACTIVE").length,
+      expiredCards: purchases.filter((p) => p.status === "EXPIRED").length,
+      fullyRedeemedCards: purchases.filter((p) => p.status === "FULLY_REDEEMED")
+        .length,
     };
 
     return res.status(200).json({
@@ -728,11 +598,11 @@ export const getCustomerPurchases = async (req: Request, res: Response) => {
       },
     });
   } catch (error: any) {
-    console.error('Get customer purchases error:', error);
+    console.error("Get customer purchases error:", error);
 
     return res.status(500).json({
       success: false,
-      message: 'Internal server error',
+      message: "Internal server error",
       error: error.message,
     });
   }

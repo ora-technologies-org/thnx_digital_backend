@@ -7,6 +7,7 @@ import {
   getAllMerchants,
   getPendingMerchants,
   verifyMerchant,
+  deleteMerchant,
 } from "../controllers/merchant.controller";
 import {
   authenticate,
@@ -78,6 +79,14 @@ router.post(
   authenticate,
   authorize("ADMIN"),
   verifyMerchant,
+);
+
+// In your auth.routes.ts
+router.delete(
+  "/admin/merchants/:merchantId",
+  authenticate,
+  authorize("ADMIN"),
+  deleteMerchant,
 );
 
 export default router;
