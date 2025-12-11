@@ -8,6 +8,7 @@ import prisma from "./utils/prisma.util";
 import giftCardRoutes from "./routes/giftCard.routes";
 import purchaseRoutes from "./routes/purchase.routes";
 import cors from "cors";
+import merchantRoutes from "./routes/merchant.routes";
 
 // Load environment variables
 dotenv.config();
@@ -118,6 +119,7 @@ app.get("/health", async (req: Request, res: Response) => {
 app.use("/api/auth", authRoutes);
 app.use("/api/gift-cards", giftCardRoutes);
 app.use("/api/purchases", purchaseRoutes);
+app.use("/api/merchants", merchantRoutes);
 
 // 404 handler
 app.use((req: Request, res: Response) => {
