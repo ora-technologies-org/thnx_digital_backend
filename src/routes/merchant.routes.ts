@@ -1,16 +1,19 @@
-
-import express from 'express';
+import express from "express";
 import {
   getMerchantProfile,
   updateMerchantProfile,
   resubmitProfile,
-} from '../controllers/merchant.controller';
+  adminCreateMerchant,
+  getAllMerchants,
+  getPendingMerchants,
+  verifyMerchant,
+} from "../controllers/merchant.controller";
 import {
   authenticate,
   authorize,
   requireCompleteProfile,
-} from '../middleware/auth.middleware';
-import { uploadMerchantDocs } from '../utils/multer';
+} from "../middleware/auth.middleware";
+import { uploadMerchantDocs } from "../utils/multer";
 
 const router = express.Router();
 
@@ -19,12 +22,7 @@ const router = express.Router();
  * @desc    Get merchant's own profile with stats
  * @access  Merchant
  */
-router.get(
-  '/profile',
-  authenticate,
-  authorize('MERCHANT'),
-  getMerchantProfile
-);
+router.get("/profile", authenticate, authorize("MERCHANT"), getMerchantProfile);
 
 /**
  * @route   PUT /api/merchant/profile
@@ -32,11 +30,11 @@ router.get(
  * @access  Merchant (Profile complete)
  */
 router.put(
-  '/profile',
+  "/profile",
   authenticate,
-  authorize('MERCHANT'),
+  authorize("MERCHANT"),
   requireCompleteProfile,
-  updateMerchantProfile
+  updateMerchantProfile,
 );
 
 /**
@@ -45,11 +43,41 @@ router.put(
  * @access  Merchant (Rejected status only)
  */
 router.post(
-  '/resubmit',
+  "/resubmit",
   authenticate,
-  authorize('MERCHANT'),
+  authorize("MERCHANT"),
   uploadMerchantDocs,
-  resubmitProfile
+  resubmitProfile,
+);
+
+// ==================== Admin Routes ====================
+
+router.post(
+  "/admin/create-merchant",
+  authenticate,
+  authorize("ADMIN"),
+  adminCreateMerchant,
+);
+
+router.get(
+  "/admin/merchants",
+  authenticate,
+  authorize("ADMIN"),
+  getAllMerchants,
+);
+
+router.get(
+  "/admin/merchants/pending",
+  authenticate,
+  authorize("ADMIN"),
+  getPendingMerchants,
+);
+
+router.post(
+  "/admin/merchants/:merchantId/verify",
+  authenticate,
+  authorize("ADMIN"),
+  verifyMerchant,
 );
 
 export default router;
