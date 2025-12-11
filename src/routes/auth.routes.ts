@@ -1,20 +1,16 @@
-
-
-import express from 'express';
+import express from "express";
 import {
-  merchantRegister,
   login,
-  adminCreateMerchant,
   refreshToken,
   getCurrentUser,
   logout,
-  verifyMerchant,
-  getPendingMerchants,
+} from "../controllers/auth.controller";
+import { authenticate, authorize } from "../middleware/auth.middleware";
+import { uploadMerchantDocs } from "../utils/multer";
+import {
   completeProfile,
-  getAllMerchants,
-} from '../controllers/auth.controller';
-import { authenticate, authorize } from '../middleware/auth.middleware';
-import { uploadMerchantDocs } from '../utils/multer';
+  merchantRegister,
+} from "../controllers/merchant.controller";
 
 const router = express.Router();
 
@@ -25,28 +21,28 @@ const router = express.Router();
  * @desc    Quick merchant registration (minimal info)
  * @access  Public
  */
-router.post('/merchant/register', merchantRegister);
+router.post("/merchant/register", merchantRegister);
 
 /**
  * @route   POST /api/auth/login
  * @desc    Login user
  * @access  Public
  */
-router.post('/login', login);
+router.post("/login", login);
 
 /**
  * @route   POST /api/auth/refresh
  * @desc    Refresh access token
  * @access  Public
  */
-router.post('/refresh', refreshToken);
+router.post("/refresh", refreshToken);
 
 /**
  * @route   POST /api/auth/logout
  * @desc    Logout user
  * @access  Public
  */
-router.post('/logout', logout);
+router.post("/logout", logout);
 
 // ==================== Protected Routes ====================
 
@@ -56,11 +52,11 @@ router.post('/logout', logout);
  * @access  Merchant
  */
 router.post(
-  '/merchant/complete-profile',
+  "/merchant/complete-profile",
   authenticate,
-  authorize('MERCHANT'),
+  authorize("MERCHANT"),
   uploadMerchantDocs,
-  completeProfile
+  completeProfile,
 );
 
 /**
@@ -68,37 +64,6 @@ router.post(
  * @desc    Get current user profile
  * @access  Private
  */
-router.get('/me', authenticate, getCurrentUser);
-
-// ==================== Admin Routes ====================
-
-router.post(
-  '/admin/create-merchant',
-  authenticate,
-  authorize('ADMIN'),
-  adminCreateMerchant
-);
-
-// ADD THIS NEW ROUTE (before /pending)
-router.get(
-  '/admin/merchants',
-  authenticate,
-  authorize('ADMIN'),
-  getAllMerchants
-);
-
-router.get(
-  '/admin/merchants/pending',
-  authenticate,
-  authorize('ADMIN'),
-  getPendingMerchants
-);
-
-router.post(
-  '/admin/merchants/:merchantId/verify',
-  authenticate,
-  authorize('ADMIN'),
-  verifyMerchant
-);
+router.get("/me", authenticate, getCurrentUser);
 
 export default router;
