@@ -12,7 +12,8 @@
     "resolveJsonModule": true,
     "moduleResolution": "node",
     "typeRoots": ["./node_modules/@types", "./src/types"],
-    "types": ["node"]
+    "types": ["node"],
+    "removeComments": false  // 🔥 ADD THIS LINE - Preserves JSDoc comments!
   },
   "include": ["src/**/*"],
   "exclude": ["node_modules", "dist"]
