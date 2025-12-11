@@ -10,40 +10,39 @@ import purchaseRoutes from "./routes/purchase.routes";
 import cors from "cors";
 import merchantRoutes from "./routes/merchant.routes";
 
+// Swagger
+import swaggerUi from "swagger-ui-express";
+import swaggerSpec from "./config/swagger.config";
+
 // Load environment variables
 dotenv.config();
 
 const app = express();
 const PORT = process.env.PORT || 3000;
 
-// CORS configuration - allow localhost and production
+// CORS configuration
 const allowedOrigins = [
-  // Localhost development
   "http://localhost:8080",
   "http://localhost:3000",
   "http://localhost:5173",
   "http://127.0.0.1:8080",
   "http://127.0.0.1:3000",
   "http://127.0.0.1:5173",
-  // Production domains
   "http://thnxdigital.com",
   "https://thnxdigital.com",
   "http://www.thnxdigital.com",
   "https://www.thnxdigital.com",
-  // From env variable
   process.env.FRONTEND_URL,
 ].filter(Boolean) as string[];
 
 const corsOptions = {
   origin: (
     origin: string | undefined,
-    callback: (err: Error | null, allow?: boolean) => void,
+    callback: (err: Error | null, allow?: boolean) => void
   ) => {
-    // Allow requests with no origin (mobile apps, Postman, etc.)
     if (!origin) {
       return callback(null, true);
     }
-
     if (
       allowedOrigins.includes(origin) ||
       process.env.NODE_ENV === "development"
@@ -60,11 +59,11 @@ const corsOptions = {
 
 app.use(cors(corsOptions));
 
-// Middleware - Increase limits for file uploads (fixes 413 error)
+// Middleware
 app.use(express.json({ limit: "50mb" }));
 app.use(express.urlencoded({ limit: "50mb", extended: true }));
 
-// Session middleware (required for Passport)
+// Session middleware
 app.use(
   session({
     secret: process.env.SESSION_SECRET || "hello123",
@@ -72,9 +71,9 @@ app.use(
     saveUninitialized: false,
     cookie: {
       secure: process.env.NODE_ENV === "production",
-      maxAge: 24 * 60 * 60 * 1000, // 24 hours
+      maxAge: 24 * 60 * 60 * 1000,
     },
-  }),
+  })
 );
 
 // Initialize Passport
@@ -82,14 +81,41 @@ configurePassport();
 app.use(passport.initialize());
 app.use(passport.session());
 
+// ==================== Swagger Documentation ====================
+app.use(
+  "/api-docs",
+  swaggerUi.serve,
+  swaggerUi.setup(swaggerSpec, {
+    customCss: ".swagger-ui .topbar { display: none }",
+    customSiteTitle: "Thnx Digital API Documentation",
+    swaggerOptions: {
+      persistAuthorization: true,
+      docExpansion: "none",
+      filter: true,
+      showExtensions: true,
+      showCommonExtensions: true,
+    },
+  })
+);
+
+// Swagger JSON endpoint
+app.get("/api-docs.json", (req: Request, res: Response) => {
+  res.setHeader("Content-Type", "application/json");
+  res.send(swaggerSpec);
+});
+
 // Routes
 app.get("/", (req: Request, res: Response) => {
   res.json({
     success: true,
     message: "Thnx Digital API - Welcome!",
     version: "1.0.0",
+    documentation: "/api-docs",
     endpoints: {
       auth: "/api/auth",
+      merchants: "/api/merchants",
+      giftCards: "/api/gift-cards",
+      purchases: "/api/purchases",
       health: "/health",
     },
   });
@@ -115,11 +141,11 @@ app.get("/health", async (req: Request, res: Response) => {
   }
 });
 
-// Auth routes
+// API Routes
 app.use("/api/auth", authRoutes);
+app.use("/api/merchants", merchantRoutes);
 app.use("/api/gift-cards", giftCardRoutes);
 app.use("/api/purchases", purchaseRoutes);
-app.use("/api/merchants", merchantRoutes);
 
 // 404 handler
 app.use((req: Request, res: Response) => {
@@ -155,11 +181,11 @@ process.on("SIGTERM", async () => {
 // Start server
 app.listen(PORT, () => {
   console.log(`🚀 Server running on http://localhost:${PORT}`);
+  console.log(`📚 API Docs: http://localhost:${PORT}/api-docs`);
   console.log(`📝 Environment: ${process.env.NODE_ENV || "development"}`);
   console.log(
-    `🔐 Google OAuth: ${process.env.GOOGLE_CLIENT_ID ? "Enabled" : "Disabled"}`,
+    `🔐 Google OAuth: ${process.env.GOOGLE_CLIENT_ID ? "Enabled" : "Disabled"}`
   );
-  console.log(`🌐 Allowed Origins: ${allowedOrigins.join(", ")}`);
 });
 
 export default app;
