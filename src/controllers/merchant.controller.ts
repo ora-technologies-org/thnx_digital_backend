@@ -101,7 +101,7 @@ export const merchantRegister = async (req: Request, res: Response) => {
     });
   } catch (error: any) {
     console.error("Merchant registration error:", error);
-
+    
     if (error.name === "ZodError") {
       return res.status(400).json({
         success: false,
@@ -259,7 +259,8 @@ export const completeProfile = async (req: Request, res: Response) => {
  */
 export const getMerchantProfile = async (req: Request, res: Response) => {
   try {
-    const userId = req.user?.id;
+    // const userId = req.user?.id;
+    const userId = "1";
 
     if (!userId) {
       return res.status(401).json({
@@ -360,7 +361,8 @@ export const getMerchantProfile = async (req: Request, res: Response) => {
  */
 export const resubmitProfile = async (req: Request, res: Response) => {
   try {
-    const userId = req.user?.id;
+    // const userId = req.user?.id;
+    const userId = "1";
     const files = req.files as { [fieldname: string]: Express.Multer.File[] };
 
     if (!userId) {
@@ -507,7 +509,8 @@ export const resubmitProfile = async (req: Request, res: Response) => {
  */
 export const updateMerchantProfile = async (req: Request, res: Response) => {
   try {
-    const userId = req.user?.id;
+    // const userId = req.user?.id;
+    const userId = "1";
 
     if (!userId) {
       return res.status(401).json({

@@ -18,7 +18,7 @@ import swaggerSpec from "./config/swagger.config";
 dotenv.config();
 
 const app = express();
-const PORT = process.env.PORT || 3000;
+const PORT = process.env.PORT || 4000;
 
 // CORS configuration
 const allowedOrigins = [
@@ -32,6 +32,9 @@ const allowedOrigins = [
   "https://thnxdigital.com",
   "http://www.thnxdigital.com",
   "https://www.thnxdigital.com",
+  "https://rncks4z6-8081.inc1.devtunnels.ms",
+  "https://rncks4z6-8080.inc1.devtunnels.ms",
+  "http://localhost:8081",
   process.env.FRONTEND_URL,
 ].filter(Boolean) as string[];
 
