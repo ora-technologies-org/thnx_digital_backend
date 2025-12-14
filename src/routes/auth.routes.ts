@@ -6,6 +6,9 @@ import {
   refreshToken,
   getCurrentUser,
   logout,
+  getOtp,
+  verifyOtp,
+  changePassword,
 } from "../controllers/auth.controller";
 import { authenticate, authorize } from "../middleware/auth.middleware";
 import { uploadMerchantDocs } from "../utils/multer";
@@ -451,5 +454,10 @@ router.post(
  *         $ref: '#/components/responses/InternalServerError'
  */
 router.get("/me", authenticate, getCurrentUser);
+
+
+router.post("/get-otp", getOtp);
+router.post("/verify-otp", verifyOtp);
+router.post("/reset-password", changePassword);
 
 export default router;

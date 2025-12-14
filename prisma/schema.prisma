@@ -75,6 +75,7 @@ model User {
   redemptions       Redemption[]
   verifiedMerchants MerchantProfile[] @relation("MerchantVerifier")
   refreshTokens     RefreshToken[]
+  changePassword    ChangePassword[]
 
   @@map("users")
 }
@@ -224,4 +225,20 @@ model Redemption {
   @@index([purchasedGiftCardId])
   @@index([redeemedById])
   @@map("redemptions")
+}
+
+
+model ChangePassword { 
+  id                  String     @id @default(uuid())
+  userId              String
+
+  //users table reference
+  user      User @relation( fields: [userId], references: [id] )
+
+  //otp
+  otpToken            String
+  otpExpiry           DateTime
+  used                Boolean
+  createdAt           DateTime @default(now())
+  updateAt            DateTime @updatedAt
 }
