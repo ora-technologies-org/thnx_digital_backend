@@ -27,13 +27,13 @@ COPY . .
 # Build TypeScript
 RUN npm run build
 
+
 # Stage 2: Production
 FROM node:20-alpine AS production
-
 WORKDIR /app
 
-# Install dependencies for Prisma and health checks
-RUN apk add --no-cache openssl wget
+# Install dependencies for Prisma, health checks, AND native module compilation
+RUN apk add --no-cache openssl wget python3 make g++
 
 # Create non-root user
 RUN addgroup -g 1001 -S nodejs && \
@@ -43,8 +43,8 @@ RUN addgroup -g 1001 -S nodejs && \
 COPY package*.json ./
 COPY prisma ./prisma/
 
-# Install production dependencies only
-RUN npm ci --omit=dev --ignore-scripts
+# Install production dependencies (rebuilds bcrypt for this architecture)
+RUN npm ci --only=production
 
 # Generate Prisma Client for production
 RUN npx prisma generate
@@ -55,15 +55,10 @@ COPY --from=builder /app/dist ./dist
 # Set ownership
 RUN chown -R nodejs:nodejs /app
 
-# Switch to non-root user
 USER nodejs
-
-# Expose port
 EXPOSE 3000
 
-# Health check
 HEALTHCHECK --interval=30s --timeout=10s --start-period=40s --retries=3 \
-    CMD wget -q --spider http://localhost:3000/health || exit 1
+CMD wget -q --spider http://localhost:3000/health || exit 1
 
-# Start the application
 CMD ["sh", "-c", "npx prisma migrate deploy && node dist/server.js"]
