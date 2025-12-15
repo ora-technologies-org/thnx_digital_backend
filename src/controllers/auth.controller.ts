@@ -474,15 +474,48 @@ export const changePassword =  async (req: Request, res: Response) => {
         errors,
       });
     }
-    const {email, password, confirmPassword} = parsedData.data;
+    const {email, password, otp, confirmPassword} = parsedData.data;
     
-    if (!email || !password || !confirmPassword){
+    if (!email || !password || !confirmPassword || !otp){
       return res.status(400).json({
         success: false,
-        message: "email, password and confirmPassword required for password change."
-      })
+        message: "Email, otp, Password and confirmPassword required for password change."
+      });
     }
 
+    const user = await prisma.user.findFirst({
+      where: { email }
+    });
+
+    const otpDetails = await prisma.changePassword.findFirst({
+      where:{
+        userId: user?.id
+      },
+      orderBy:{
+        createdAt: "desc"
+      }
+    })
+
+    if (!user){
+      return res.status(404).json({
+        success: false,
+        message: "User not found with the given email"
+      });
+    }
+    if (otp !== otpDetails?.otpToken){
+      return res.status(400).json({
+        success: false,
+        otp: "The provided otp is invalid"
+      });
+    }
+
+    if (otpDetails?.otpExpiry! < new Date() ){
+      return res.status(400).json({
+        success: false,
+        message: "The provided otp has been expired."
+      })
+    }
+  
     if (password !== confirmPassword){
       return res.status(400).json({
         success: false,

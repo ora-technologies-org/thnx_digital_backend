@@ -129,6 +129,7 @@ export const adminCreateMerchantSchema = z.object({
 
 export const changePasswordSchema = z.object({
   email : z.string().email("Invalid Email Address"),
+  otp: z.string(),
   password: z.string()
     .min(8, 'Password must be at least 8 characters')
     .regex(/[A-Z]/, 'Password must contain at least one uppercase letter')
