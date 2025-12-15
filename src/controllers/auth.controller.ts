@@ -5,12 +5,10 @@ import { changePasswordSchema, loginSchema } from "../validators/auth.validator"
 import { generateTokens, verifyRefreshToken } from "../utils/jwt.util";
 import { sendForgotPasswordOTP } from "../utils/email.util";
 import { otpGenerator } from "../helpers/otp/otpGenerator";
-import { config } from "dotenv";
-import { ClientRequest } from "http";
-import { emitWarning } from "process";
+import { ClientAuthentication, OAuth2Client } from "google-auth-library";
 
 const prisma = new PrismaClient();
-
+const googleVerification = new OAuth2Client(process.env.GOOGLE_CLIENT_ID);
 // Authenticated Request interface
 export interface AuthenticatedRequest extends Request {
   authUser?: {
@@ -135,6 +133,116 @@ export const login = async (req: Request, res: Response) => {
     });
   }
 };
+
+
+export const googleLogin = async (req: Request, res: Response) => {
+  try {
+    const { credential } = req.body;
+
+    if (!credential) {
+      return res.status(400).json({
+        success: false,
+        message: "Google credential is required",
+      });
+    }
+
+    const ticket = await googleVerification.verifyIdToken({
+      idToken: credential,
+      audience: process.env.GOOGLE_CLIENT_ID,
+    });
+
+    const payload = ticket.getPayload();
+
+    if (!payload || !payload.email) {
+      return res.status(400).json({
+        success: false,
+        message: "Invalid Google token",
+      });
+    }
+
+    const { email, name, picture, sub: googleId } = payload;
+
+    let user = await prisma.user.findUnique({
+      where: { email },
+      include: { merchantProfile: true },
+    });
+
+    const expiresAt = new Date();
+    expiresAt.setDate(expiresAt.getDate() + 7);
+
+    if (!user) {
+      user = await prisma.user.create({
+        data: {
+          email,
+          name: name ?? "Google User",
+          googleId,
+          provider: "google",
+          role: "MERCHANT",
+          emailVerified: true,
+          lastLogin: new Date(),
+        },
+        include:{
+          merchantProfile: true
+        }
+      });
+    } else {
+      user = await prisma.user.update({
+        where: { email },
+        data: {
+          googleId,
+          provider: "google",
+          lastLogin: new Date(),
+        },
+        include: { merchantProfile: true },
+      });
+    }
+
+    const profileStatus =
+      user.merchantProfile?.profileStatus ?? "INCOMPLETE";
+
+
+    const tokens = generateTokens({
+      userId: user.id,
+      email: user.email,
+      role: user.role,
+      isVerified: user.emailVerified,
+      profileStatus,
+    });
+
+
+    await prisma.refreshToken.create({
+      data: {
+        userId: user.id,
+        token: tokens.refreshToken,
+        expiresAt,
+      },
+    });
+
+    return res.status(200).json({
+      success: true,
+      message: "Google login successful",
+      data: {
+        user: {
+          id: user.id,
+          email: user.email,
+          name: user.name,
+          role: user.role,
+          profileStatus,
+          isVerified: user.merchantProfile?.isVerified || false,
+        },
+        tokens,
+      },
+    });
+  } catch (error: any) {
+    console.error("Google login error:", error);
+    return res.status(500).json({
+      success: false,
+      message: "Google signup/login failed",
+      error: error.message,
+    });
+  }
+};
+
 
 /**
  * @route   POST /api/auth/refresh
@@ -540,8 +648,8 @@ export const changePassword =  async (req: Request, res: Response) => {
       });
     }
     return res.status(200).json({
-      success: false,
-      message: "Password change successfully."
+      success: true,
+      message: "Password changed successfully."
     })
   } catch (error: any) {
     console.log(error);

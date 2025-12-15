@@ -13,13 +13,14 @@ export const merchantQuickRegisterSchema = z.object({
     .regex(/[a-z]/, 'Password must contain at least one lowercase letter')
     .regex(/[0-9]/, 'Password must contain at least one number'),
   name: z.string().min(2, 'Name must be at least 2 characters'),
-  businessName: z.string().min(2, 'Business name must be at least 2 characters'),
+  // businessName: z.string().min(2, 'Business name must be at least 2 characters'),
   phone: z.string().optional(),
 });
 
 
 export const completeProfileSchema = z.object({
   // Business Information
+  businessName: z.string(),
   businessRegistrationNumber: z.string().optional(),
   taxId: z.string().optional(),
   businessType: z.string().optional(),

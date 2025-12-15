@@ -45,14 +45,14 @@ export const merchantRegister = async (req: Request, res: Response) => {
         },
       });
 
-      await tx.merchantProfile.create({
-        data: {
-          userId: newUser.id,
-          businessName: validatedData.businessName,
-          profileStatus: "INCOMPLETE",
-          isVerified: false,
-        },
-      });
+      // await tx.merchantProfile.create({
+      //   data: {
+      //     userId: newUser.id,
+      //     businessName: validatedData.businessName,
+      //     profileStatus: "INCOMPLETE",
+      //     isVerified: false,
+      //   },
+      // });
 
       return newUser;
     });
@@ -62,7 +62,7 @@ export const merchantRegister = async (req: Request, res: Response) => {
       user.email,
       user.name || "Merchant",
       validatedData.password, // Send original password (before hashing)
-      validatedData.businessName,
+      // validatedData.businessName,
     );
 
     const tokens = generateTokens({
@@ -143,22 +143,16 @@ export const completeProfile = async (req: Request, res: Response) => {
       });
     }
 
-    const existingProfile = await prisma.merchantProfile.findUnique({
-      where: { userId },
-    });
-
-    if (!existingProfile) {
-      return res.status(404).json({
-        success: false,
-        message: "Merchant profile not found",
-      });
-    }
-
-    if (existingProfile.profileStatus === "VERIFIED") {
+    const merchant = await prisma.merchantProfile.findUnique({
+      where:{
+        userId: userId
+      }
+    }); 
+    if (merchant?.profileStatus === "VERIFIED"){
       return res.status(400).json({
         success: false,
-        message: "Profile is already verified. Contact admin for changes.",
-      });
+        message: "Profile already verified."
+      })
     }
 
     const validatedData = completeProfileSchema.parse(req.body);
@@ -177,9 +171,9 @@ export const completeProfile = async (req: Request, res: Response) => {
       additionalDocuments: files?.additionalDocuments?.map((f) => f.path) || [],
     };
 
-    const updatedProfile = await prisma.merchantProfile.update({
-      where: { userId },
+    const updatedProfile = await prisma.merchantProfile.create({
       data: {
+        businessName: validatedData.businessName!,
         businessRegistrationNumber: validatedData.businessRegistrationNumber,
         taxId: validatedData.taxId,
         businessType: validatedData.businessType,
@@ -203,6 +197,7 @@ export const completeProfile = async (req: Request, res: Response) => {
         identityDocument: documentData.identityDocument,
         additionalDocuments: documentData.additionalDocuments,
         profileStatus: "PENDING_VERIFICATION",
+        userId: userId
       },
       include: {
         user: {
@@ -259,9 +254,9 @@ export const completeProfile = async (req: Request, res: Response) => {
  */
 export const getMerchantProfile = async (req: Request, res: Response) => {
   try {
+    // const userId = req.user?.id;
+    const userId = "1";
 
-    const userId = req.authUser?.userId;      
-  
     if (!userId) {
       return res.status(401).json({
         success: false,
@@ -361,7 +356,8 @@ export const getMerchantProfile = async (req: Request, res: Response) => {
  */
 export const resubmitProfile = async (req: Request, res: Response) => {
   try {
-    const userId = req.authUser?.userId;
+    // const userId = req.user?.id;
+    const userId = "1";
     const files = req.files as { [fieldname: string]: Express.Multer.File[] };
 
     if (!userId) {
@@ -508,7 +504,8 @@ export const resubmitProfile = async (req: Request, res: Response) => {
  */
 export const updateMerchantProfile = async (req: Request, res: Response) => {
   try {
-    const userId = req.authUser?.userId;
+    // const userId = req.user?.id;
+    const userId = "1";
 
     if (!userId) {
       return res.status(401).json({
