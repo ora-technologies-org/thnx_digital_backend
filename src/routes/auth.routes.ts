@@ -10,6 +10,7 @@ import {
   verifyOtp,
   changePassword,
   googleLogin,
+  resetPassword,
 } from "../controllers/auth.controller";
 import { authenticate, authorize } from "../middleware/auth.middleware";
 import { uploadMerchantDocs } from "../utils/multer";
@@ -461,6 +462,7 @@ router.post("/get-otp", getOtp);
 router.post("/verify-otp", verifyOtp);
 router.post("/reset-password", changePassword);
 
-router.post("/google-login", googleLogin)
+router.post("/google-login", googleLogin);
 
+router.post("/change-password", resetPassword);
 export default router;

@@ -20,7 +20,7 @@ export const merchantQuickRegisterSchema = z.object({
 
 export const completeProfileSchema = z.object({
   // Business Information
-  businessName: z.string(),
+  businessName: z.string().min(2, 'Business name must be at least 2 characters'),
   businessRegistrationNumber: z.string().optional(),
   taxId: z.string().optional(),
   businessType: z.string().optional(),
@@ -123,7 +123,14 @@ export const adminCreateMerchantSchema = z.object({
   businessPhone: z.string().optional(),
   businessEmail: z.string().email('Invalid business email').optional(),
   website: z.string().url('Invalid website URL').optional(),
-  
+
+  // Bank Details (for payments)
+  bankName: z.string().min(1, 'Bank name is required'),
+  accountNumber: z.string().min(1, 'Account number is required'),
+  accountHolderName: z.string().min(1, 'Account holder name is required'),
+  ifscCode: z.string().optional(),
+  swiftCode: z.string().optional(),
+
   // Additional Info
   description: z.string().optional(),
 });
@@ -143,8 +150,28 @@ export const changePasswordSchema = z.object({
     .regex(/[0-9]/, 'Password must contain at least one number')
 })
 
+export const resetPasswordSchema = z.object({
+  email : z.string().email("Invalid Email Address"),
+  password: z.string()
+    .min(8, 'Password must be at least 8 characters')
+    .regex(/[A-Z]/, 'Password must contain at least one uppercase letter')
+    .regex(/[a-z]/, 'Password must contain at least one lowercase letter')
+    .regex(/[0-9]/, 'Password must contain at least one number'),
+  newPassword: z.string()
+   .min(8, 'Password must be at least 8 characters')
+    .regex(/[A-Z]/, 'Password must contain at least one uppercase letter')
+    .regex(/[a-z]/, 'Password must contain at least one lowercase letter')
+    .regex(/[0-9]/, 'Password must contain at least one number'),
+  confirmPassword: z.string()
+    .min(8, 'Password must be at least 8 characters')
+    .regex(/[A-Z]/, 'Password must contain at least one uppercase letter')
+    .regex(/[a-z]/, 'Password must contain at least one lowercase letter')
+    .regex(/[0-9]/, 'Password must contain at least one number')
+})
+
 export type MerchantRegister = z.infer<typeof merchantQuickRegisterSchema>;
 export type MerchantRegisterInput = z.infer<typeof completeProfileSchema>;
 export type LoginInput = z.infer<typeof loginSchema>;
 export type AdminCreateMerchantInput = z.infer<typeof adminCreateMerchantSchema>;
 export type ChangePasswordInput = z.infer<typeof changePasswordSchema>
+export type ResetPasswordInput = z.infer<typeof resetPasswordSchema>

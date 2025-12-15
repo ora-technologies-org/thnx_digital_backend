@@ -576,6 +576,7 @@ export const adminCreateMerchant = async (req: Request, res: Response) => {
     const authReq = req as AuthenticatedRequest;
     const validatedData = adminCreateMerchantSchema.parse(req.body);
     const adminId = authReq.authUser?.userId;
+    const files = req.files as { [fieldname: string]: Express.Multer.File[] };
 
     const existingUser = await prisma.user.findUnique({
       where: { email: validatedData.email },
@@ -587,6 +588,14 @@ export const adminCreateMerchant = async (req: Request, res: Response) => {
         message: "User with this email already exists",
       });
     }
+
+
+    const documentData = {
+        registrationDocument: files?.registrationDocument?.[0]?.path || null,
+        taxDocument: files?.taxDocument?.[0]?.path || null,
+        identityDocument: files?.identityDocument?.[0]?.path,
+        additionalDocuments: files?.additionalDocuments?.map((f) => f.path) || [],
+    };
 
     const hashedPassword = await bcrypt.hash(validatedData.password, 10);
 
@@ -601,6 +610,7 @@ export const adminCreateMerchant = async (req: Request, res: Response) => {
           emailVerified: true,
           isActive: true,
           createdById: adminId,
+          isFirstTime: true
         },
       });
 
@@ -625,6 +635,15 @@ export const adminCreateMerchant = async (req: Request, res: Response) => {
           isVerified: true,
           verifiedAt: new Date(),
           verifiedById: adminId,
+          bankName: validatedData.bankName,
+          accountNumber: validatedData.accountNumber,
+          accountHolderName: validatedData.accountHolderName,
+          ifscCode: validatedData.ifscCode,
+          swiftCode: validatedData.swiftCode,
+          taxDocument: documentData.taxDocument,
+          identityDocument: documentData.identityDocument,
+          additionalDocuments: documentData.additionalDocuments,
+          registrationDocument: documentData.registrationDocument,
         },
       });
 

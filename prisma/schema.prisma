@@ -66,6 +66,8 @@ model User {
   resetToken       String?
   resetTokenExpiry DateTime?
 
+  //first time logging in
+  isFirstTime Boolean?
   // Relations
   merchantProfile   MerchantProfile?
   createdById       String?
