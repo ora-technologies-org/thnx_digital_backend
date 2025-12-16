@@ -938,7 +938,39 @@ export const verifyMerchant = async (req: Request, res: Response) => {
  */
 export const getAllMerchants = async (req: Request, res: Response) => {
   try {
+    const { 
+      profileStatus, 
+      active, 
+      sort = "desc", 
+      createdBy,
+      search 
+    } = req.query;
+
+    const whereClause: any = {};
+
+    if (profileStatus) {
+      whereClause.profileStatus = profileStatus as string;
+    }
+
+    if (active !== undefined) {
+      whereClause.user = {
+        isActive: active === "true",
+      };
+    }
+
+    if (createdBy) {
+      whereClause.userId = createdBy as string;
+    }
+
+    if (search) {
+      whereClause.businessName = {
+        contains: search as string,
+        mode: "insensitive",
+      };
+    }
+
     const merchants = await prisma.merchantProfile.findMany({
+      where: whereClause,
       include: {
         user: {
           select: {
@@ -952,15 +984,38 @@ export const getAllMerchants = async (req: Request, res: Response) => {
         },
       },
       orderBy: {
-        createdAt: "desc",
+        createdAt: sort === "asc" ? "asc" : "desc",
       },
+    });
+
+    const countWhereClause: any = { ...whereClause };
+    delete countWhereClause.profileStatus;
+
+    const statusCounts = await prisma.merchantProfile.groupBy({
+      by: ["profileStatus"],
+      where: countWhereClause,
+      _count: {
+        profileStatus: true,
+      },
+    });
+
+    const counts = {
+      PENDING_VERIFICATION: 0,
+      VERIFIED: 0,
+      REJECTED: 0,
+      INCOMPLETE: 0,
+    };
+
+    statusCounts.forEach((item) => {
+      counts[item.profileStatus] = item._count.profileStatus;
     });
 
     return res.status(200).json({
       success: true,
       data: {
-        merchants,
         count: merchants.length,
+        statusCounts: counts,
+        merchants,
       },
     });
   } catch (error: any) {
