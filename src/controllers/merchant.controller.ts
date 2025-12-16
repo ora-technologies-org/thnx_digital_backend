@@ -823,7 +823,6 @@ export const getPendingMerchants = async (req: Request, res: Response) => {
       ];
     }
 
-    console.log(whereClause);
 
     const pendingMerchants = await prisma.merchantProfile.findMany({
       where: whereClause,
@@ -1283,3 +1282,33 @@ export const updateMerchantData = async (req: Request, res: Response, next: Next
   }
 }
 
+
+export const getGiftCardByMerchant = async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const { merchantId } = req.params; 
+    const giftCards = await prisma.giftCard.findMany({
+      where:{
+        merchantId: merchantId
+      }
+    });
+    if (!giftCards){
+      return res.status(404).json({
+        success: false,
+        message: "No gift cards have been issued by this merchant yet."
+      })
+    }
+    return res.status(200).json({
+      success: true,
+      message: "Gift cards fetched successfully.",
+      data: giftCards
+    });
+
+    
+  } catch (error: any) {
+    return res.status(500).json({
+      success: false,
+      message: "Error fetching gift cards",
+      error: error.message
+    })
+  }
+}
