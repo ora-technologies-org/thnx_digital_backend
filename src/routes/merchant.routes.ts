@@ -10,6 +10,7 @@ import {
   deleteMerchant,
   updateMerchantData,
   adminUpdateMerchant,
+  getMerchantById,
 } from "../controllers/merchant.controller";
 import {
   authenticate,
@@ -17,6 +18,7 @@ import {
   requireCompleteProfile,
 } from "../middleware/auth.middleware";
 import { uploadMerchantDocs } from "../utils/multer";
+import { auth } from "google-auth-library";
 
 const router = express.Router();
 
@@ -512,7 +514,10 @@ router.delete(
   deleteMerchant
 );
 
-router.put("/", authenticate, authorize("MERCHANT"), uploadMerchantDocs, updateMerchantData)
-router.put("/:merchantId", authenticate, authorize("ADMIN"), uploadMerchantDocs, adminUpdateMerchant)
+router.put("/", authenticate, authorize("MERCHANT"), uploadMerchantDocs, updateMerchantData);
+router.put("/:merchantId", authenticate, authorize("ADMIN"), uploadMerchantDocs, adminUpdateMerchant);
+
+
+router.get("/:merchantId", authenticate, authorize("ADMIN"), getMerchantById);
 
 export default router;

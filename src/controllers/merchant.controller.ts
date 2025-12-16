@@ -9,6 +9,7 @@ import { sendWelcomeEmail } from "../utils/email.util";
 import { AuthenticatedRequest } from "./auth.controller";
 import bcrypt from "bcrypt";
 import { generateTokens } from "../utils/jwt.util";
+import { date } from "zod";
 
 /**
  * @route   POST /api/auth/merchant/register
@@ -1027,6 +1028,57 @@ export const getAllMerchants = async (req: Request, res: Response) => {
     });
   }
 };
+
+export const getMerchantById = async (req: Request, res: Response) => {
+  try {
+    const { merchantId } = req.params;
+    console.log(merchantId);
+    const merchant = await prisma.merchantProfile.findUnique({
+      where:{
+        id: merchantId
+      },include:{
+        user: {
+          select: {
+            id: true,
+            email: true,
+            name: true,
+            phone: true,
+            role: true,
+            isActive: true,
+            provider: true,
+            avatar: true,
+            bio: true,
+            emailVerified: true,
+            lastLogin: true,
+            createdAt: true,
+            updatedAt: true
+
+          }
+        }
+      }
+    });
+    // const {password, ...merchantData} = merchant?.user
+    if (!merchant){
+      return res.status(404).json({
+        success: false,
+        message: "Merchant not found with the given id."
+      })
+    }
+    return res.status(200).json({
+      success: true,
+      message: "Merchant fetched successfully",
+      data: merchant
+    });
+
+  } catch (error: any) {
+    console.error("Get all merchants error:", error);
+    return res.status(500).json({
+      success: false,
+      message: "Error fetching merchants",
+      error: error.message,
+    });
+  }
+}
 
 /**
  * @route   DELETE /api/auth/admin/merchants/:merchantId
