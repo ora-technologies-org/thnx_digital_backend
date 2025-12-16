@@ -718,7 +718,7 @@ export const adminUpdateMerchant = async (req: Request, res: Response, next: Nex
 
 
     const updateData: Record<string, any> = {};
-    const allowedFileds = ["businessName", "businessRegistrationNumber", "taxId", "businessType", "businessCategory", "address", "city", "state", "zipCode", "country", "businessPhone", "businessEmail", "website", "bankName", "accountNumber", "accountHolderName", "ifscCode", "swiftCode", "description", "registrationDocument", "taxDocument", "identityDocument", "additionalDocuments"];
+    const allowedFileds = ["businessName", "businessRegistrationNumber", "taxId", "businessType", "businessCategory", "address", "city", "state", "zipCode", "country", "businessPhone", "businessEmail", "website", "bankName", "accountNumber", "accountHolderName", "ifscCode", "swiftCode", "description", "registrationDocument", "taxDocument", "identityDocument", "additionalDocuments", "giftCardLimit"];
     
     const sentFields = Object.keys(req.body);
     const invalidFields = sentFields.filter((field) => !allowedFileds.includes(field));
@@ -761,6 +761,9 @@ export const adminUpdateMerchant = async (req: Request, res: Response, next: Nex
       );
     }
 
+    if (updateData.giftCardLimit){
+      updateData.giftCardLimit = Number(updateData.giftCardLimit)
+    };
     if (merchant?.profileStatus === "VERIFIED"){
         updateData.profileStatus = "VERIFIED";
         const updateMerchant = await prisma.merchantProfile.update({

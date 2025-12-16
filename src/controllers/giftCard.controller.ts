@@ -7,7 +7,7 @@ import {
 import prisma from '../utils/prisma.util';
 import { Decimal } from '@prisma/client/runtime/library';
 
-const GIFT_CARD_LIMIT = 10;
+// const GIFT_CARD_LIMIT = 10;
 
 // Define authenticated request interface
 interface AuthenticatedRequest extends Request {
@@ -37,6 +37,19 @@ export const createGiftCard = async (req: Request, res: Response) => {
       });
     }
 
+    const merchant = await prisma.merchantProfile.findUnique({
+      where:{
+        userId: merchantId
+      }
+    });
+
+    if (!merchant){
+      return res.status(404).json({
+        success: false,
+        message: "Merchant not found with given Id."
+      })
+    }
+
     // Validate request body
     const validatedData = createGiftCardSchema.parse(req.body);
 
@@ -48,10 +61,10 @@ export const createGiftCard = async (req: Request, res: Response) => {
       },
     });
 
-    if (existingCardsCount >= GIFT_CARD_LIMIT) {
+    if (existingCardsCount >= merchant.giftCardLimit) {
       return res.status(400).json({
         success: false,
-        message: `You have reached the maximum limit of ${GIFT_CARD_LIMIT} active gift cards`,
+        message: `You have reached the maximum limit of ${merchant.giftCardLimit} active gift cards`,
       });
     }
 
@@ -120,7 +133,18 @@ export const getMyGiftCards = async (req: Request, res: Response) => {
         message: 'Unauthorized',
       });
     }
+    const merchant = await prisma.merchantProfile.findUnique({
+      where:{
+        userId: merchantId
+      }
+    });
 
+    if (!merchant){
+      return res.status(404).json({
+        success: false,
+        message: "Merchant not found with given Id."
+      })
+    }
     const giftCards = await prisma.giftCard.findMany({
       where: { merchantId },
       orderBy: { createdAt: 'desc' },
@@ -153,8 +177,8 @@ export const getMyGiftCards = async (req: Request, res: Response) => {
         giftCards,
         total: giftCards.length,
         activeCards: activeCardsCount,
-        limit: GIFT_CARD_LIMIT,
-        remaining: Math.max(0, GIFT_CARD_LIMIT - activeCardsCount),
+        limit: merchant.giftCardLimit,
+        remaining: Math.max(0, merchant.giftCardLimit - activeCardsCount),
       },
     });
   } catch (error: any) {

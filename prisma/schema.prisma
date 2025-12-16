@@ -148,6 +148,9 @@ model MerchantProfile {
   description String?
   logo        String?
 
+  //giftCard limit
+  giftCardLimit Int @default(10)
+
   // Timestamps
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
