@@ -3,6 +3,7 @@ import bcrypt from "bcrypt";
 import { PrismaClient } from "@prisma/client";
 import { loginSchema } from "../validators/auth.validator";
 import { generateTokens, verifyRefreshToken } from "../utils/jwt.util";
+import { ActivityLogger } from "../services/activityLog.service";
 
 const prisma = new PrismaClient();
 
@@ -39,6 +40,9 @@ export const login = async (req: Request, res: Response) => {
     });
 
     if (!user) {
+
+      await ActivityLogger.loginFailed(validatedData.email, 'User not found', req);
+
       return res.status(401).json({
         success: false,
         message: "Invalid email or password",
@@ -46,6 +50,8 @@ export const login = async (req: Request, res: Response) => {
     }
 
     if (!user.isActive) {
+      await ActivityLogger.loginFailed(validatedData.email, 'Account deactivated', req);
+
       return res.status(403).json({
         success: false,
         message: "Your account has been deactivated. Contact support.",
@@ -59,12 +65,14 @@ export const login = async (req: Request, res: Response) => {
       );
 
       if (!isPasswordValid) {
+        await ActivityLogger.loginFailed(validatedData.email, 'Invalid password', req);
         return res.status(401).json({
           success: false,
           message: "Invalid email or password",
         });
       }
     } else {
+      await ActivityLogger.loginFailed(validatedData.email, 'OAuth account attempted password login', req);
       return res.status(400).json({
         success: false,
         message: "This account uses OAuth. Please login with Google.",
@@ -96,6 +104,9 @@ export const login = async (req: Request, res: Response) => {
       where: { id: user.id },
       data: { lastLogin: new Date() },
     });
+
+    await ActivityLogger.login(user.id, user.role, req);
+
 
     return res.status(200).json({
       success: true,
@@ -239,9 +250,20 @@ export const logout = async (req: Request, res: Response) => {
       });
     }
 
+    const tokenRecord = await prisma.refreshToken.findUnique({
+      where: { token: refreshToken },
+      include: { user: true }
+    });
+
+
     await prisma.refreshToken.deleteMany({
       where: { token: refreshToken },
     });
+
+    if (tokenRecord?.user) {
+      await ActivityLogger.logout(tokenRecord.user.id, tokenRecord.user.role, req);
+    }
+
 
     return res.status(200).json({
       success: true,
