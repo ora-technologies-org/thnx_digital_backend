@@ -12,6 +12,7 @@ import {
   adminUpdateMerchant,
   getMerchantById,
   getGiftCardByMerchant,
+  getVerifiedMerchants,
 } from "../controllers/merchant.controller";
 import {
   authenticate,
@@ -522,5 +523,6 @@ router.put("/:merchantId", authenticate, authorize("ADMIN"), uploadMerchantDocs,
 router.get("/:merchantId", authenticate, authorize("ADMIN"), getMerchantById);
 
 router.get("/cards/:merchantId", authenticate, authorize("ADMIN"), getGiftCardByMerchant);
+router.get("/all/verified", authenticate, authorize("ADMIN"), getVerifiedMerchants);
 
 export default router;

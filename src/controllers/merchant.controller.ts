@@ -1315,3 +1315,30 @@ export const getGiftCardByMerchant = async (req: Request, res: Response, next: N
     })
   }
 }
+
+export const getVerifiedMerchants = async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const merchant = await prisma.merchantProfile.findMany({
+      where:{
+        profileStatus: "VERIFIED"
+      }
+    });
+    if (!merchant){
+      return res.status(400).json({
+        success: false,
+        message: "Merchants not found"
+      })
+    }
+    return res.status(200).json({
+      success: true,
+      message: "Merchants fetched successfully",
+      data: merchant
+    })
+  } catch (error: any) {
+    return res.status(500).json({
+      success: false,
+      message: "Error fetching verified merchants",
+      error: error.message
+    })
+  }
+}
