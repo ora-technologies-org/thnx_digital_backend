@@ -1,8 +1,3 @@
-<<<<<<< Updated upstream
-
-# Stage 1: Build
-=======
->>>>>>> Stashed changes
 FROM node:20-alpine AS builder
 WORKDIR /app
 
@@ -19,10 +14,6 @@ COPY . .
 
 RUN npm run build
 
-<<<<<<< Updated upstream
-# Stage 2: Production
-=======
->>>>>>> Stashed changes
 FROM node:20-alpine AS production
 WORKDIR /app
 
@@ -34,10 +25,6 @@ RUN addgroup -g 1001 -S nodejs && \
 COPY package*.json ./
 COPY prisma ./prisma/
 
-<<<<<<< Updated upstream
-# Install production deps, skip husky, then rebuild bcrypt
-=======
->>>>>>> Stashed changes
 RUN npm ci --omit=dev --ignore-scripts && \
     npm rebuild bcrypt --build-from-source
 
