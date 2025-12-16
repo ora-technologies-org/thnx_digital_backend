@@ -306,7 +306,7 @@ router.post(
  *       500:
  *         $ref: '#/components/responses/InternalServerError'
  */
-router.post("/", authenticate, authorize("ADMIN"), adminCreateMerchant);
+router.post("/", authenticate, authorize("ADMIN"), uploadMerchantDocs, adminCreateMerchant);
 
 /**
  * @swagger

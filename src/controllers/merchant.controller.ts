@@ -588,6 +588,18 @@ export const adminCreateMerchant = async (req: Request, res: Response) => {
       });
     }
 
+    const existsRegistrationNumber = await prisma.merchantProfile.findFirst({
+      where: {
+        businessRegistrationNumber: validatedData.businessRegistrationNumber
+      }
+    })
+
+    if (existsRegistrationNumber){
+      return res.status(400).json({
+        success: false,
+        message: "Provided business registration number is already in use"
+      })
+    }
 
     const documentData = {
         registrationDocument: files?.registrationDocument?.[0]?.path || null,
@@ -687,6 +699,7 @@ export const adminCreateMerchant = async (req: Request, res: Response) => {
     });
   }
 };
+
 
 /**
  * @route   GET /api/auth/admin/merchants/pending
