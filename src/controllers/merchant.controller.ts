@@ -504,9 +504,8 @@ export const resubmitProfile = async (req: Request, res: Response) => {
  */
 export const updateMerchantProfile = async (req: Request, res: Response) => {
   try {
-    // const userId = req.user?.id;
-    const userId = "1";
-
+    const userId = req.authUser?.userId;
+    
     if (!userId) {
       return res.status(401).json({
         success: false,
@@ -949,3 +948,107 @@ export const deleteMerchant = async (req: Request, res: Response) => {
     });
   }
 };
+
+export const updateMerchantData = async (req: Request, res: Response) => {
+  try {
+    const id = req.authUser?.userId;
+    
+
+    const files = req.files as {
+      registrationDocument?: Express.Multer.File[];
+      taxDocument?: Express.Multer.File[];
+      identityDocument?: Express.Multer.File[];
+      additionalDocuments?: Express.Multer.File[];
+    };
+
+
+    const updateData: Record<string, any> = {};
+    const allowedFileds = ["businessName", "businessRegistrationNumber", "taxId", "businessType", "businessCategory", "address", "city", "state", "zipCode", "country", "businessPhone", "businessEmail", "website", "bankName", "accountNumber", "accountHolderName", "ifscCode", "swiftCode", "description", "registrationDocument", "taxDocument", "identityDocument", "additionalDocuments"];
+    
+    const sentFields = Object.keys(req.body);
+    const invalidFields = sentFields.filter((field) => !allowedFileds.includes(field));
+    
+    if (invalidFields.length > 0){
+      return res.status(400).json({
+        success: false,
+        message: `You cannot update the following fields: ${invalidFields.join(" ,")}`
+      })
+    }
+
+    for (const field of allowedFileds){
+      if (req.body[field] !== undefined){
+        updateData[field] = req.body[field]
+      }
+    }
+
+    // const existsRegistrationNumber = await prisma.merchantProfile.findFirst({
+    //   where: {
+    //     businessRegistrationNumber: req.body.businessRegistrationNumber
+    //   }
+    // })
+
+    // if (existsRegistrationNumber){
+    //   return res.status(400).json({
+    //     success: false,
+    //     message: "Provided business registration number is already in use"
+    //   })
+    // }
+
+    const merchant = await prisma.merchantProfile.findFirst({
+      where:{
+        userId: id
+      }
+    });
+    if (merchant?.profileStatus === "VERIFIED"){
+      return res.status(400).json({
+        success: false,
+        message: "Profile verified. Therefore, couldn't be updated."
+      });
+    };
+    if (files?.registrationDocument?.[0]) {
+      updateData.registrationDocument =
+        files.registrationDocument[0].path;
+    }
+
+    if (files?.taxDocument?.[0]) {
+      updateData.taxDocument = files.taxDocument[0].path;
+    }
+
+    if (files?.identityDocument?.[0]) {
+      updateData.identityDocument = files.identityDocument[0].path;
+    }
+
+    if (files?.additionalDocuments?.length) {
+      updateData.additionalDocuments = files.additionalDocuments.map(
+        (f) => f.path
+      );
+    }
+
+    updateData.profileStatus = "PENDING_VERIFICATION";
+
+    const updateMerchant = await prisma.merchantProfile.update({
+      where:{
+        userId: id
+      },
+      data: updateData
+    })
+    if (!updateMerchant){
+      return res.status(400).json({
+        success: true,
+        message: "Your profile couldn't be updated"
+      });
+    }
+    return res.status(200).json({
+      success :true,
+      message: "Profile updated successfully.",
+      data: updateMerchant
+    })
+
+  } catch (error: any) {
+    return res.status(500).json({
+      success: false,
+      message: "Error updating merchant data.",
+      error: error.message
+    })
+  }
+}

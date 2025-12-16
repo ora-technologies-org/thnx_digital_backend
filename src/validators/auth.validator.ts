@@ -169,6 +169,37 @@ export const resetPasswordSchema = z.object({
     .regex(/[0-9]/, 'Password must contain at least one number')
 })
 
+export const updateMerchantSchema = z.object({
+  // Business Information
+  businessName: z.string().min(2, 'Business name must be at least 2 characters').optional(),
+  businessRegistrationNumber: z.string().optional(),
+  taxId: z.string().optional(),
+  businessType: z.string().optional(),
+  businessCategory: z.string().optional(),
+  
+  // Business Address
+  address: z.string().min(1, 'Address is required').optional(),
+  city: z.string().min(1, 'City is required').optional(),
+  state: z.string().optional(),
+  zipCode: z.string().optional(),
+  country: z.string().min(1, 'Country is required').optional(),
+  
+  // Business Contact
+  businessPhone: z.string().min(1, 'Business phone is required').optional(),
+  businessEmail: z.string().email('Invalid business email').optional(),
+  website: z.string().url('Invalid website URL').optional(),
+  
+  // Bank Details (for payments)
+  bankName: z.string().min(1, 'Bank name is required').optional(),
+  accountNumber: z.string().min(1, 'Account number is required').optional(),
+  accountHolderName: z.string().min(1, 'Account holder name is required').optional(),
+  ifscCode: z.string().optional().optional(),
+  swiftCode: z.string().optional().optional(),
+  
+  // Additional Info
+  description: z.string().optional(),
+});
+
 export type MerchantRegister = z.infer<typeof merchantQuickRegisterSchema>;
 export type MerchantRegisterInput = z.infer<typeof completeProfileSchema>;
 export type LoginInput = z.infer<typeof loginSchema>;
