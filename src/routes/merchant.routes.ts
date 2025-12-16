@@ -9,6 +9,7 @@ import {
   verifyMerchant,
   deleteMerchant,
   updateMerchantData,
+  adminUpdateMerchant,
 } from "../controllers/merchant.controller";
 import {
   authenticate,
@@ -512,5 +513,6 @@ router.delete(
 );
 
 router.put("/", authenticate, authorize("MERCHANT"), uploadMerchantDocs, updateMerchantData)
+router.put("/:merchantId", authenticate, authorize("ADMIN"), uploadMerchantDocs, adminUpdateMerchant)
 
 export default router;

@@ -13,6 +13,7 @@ import merchantRoutes from "./routes/merchant.routes";
 // Swagger
 import swaggerUi from "swagger-ui-express";
 import swaggerSpec from "./config/swagger.config";
+import { errorHandler } from "./middleware/errorHandler";
 
 // Load environment variables
 dotenv.config();
@@ -157,6 +158,8 @@ app.use((req: Request, res: Response) => {
     message: "Route not found",
   });
 });
+app.use(errorHandler);
+
 
 // Error handler
 app.use((err: any, req: Request, res: Response, next: any) => {

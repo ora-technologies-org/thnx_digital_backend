@@ -1,4 +1,4 @@
-import { Request, Response } from "express";
+import { NextFunction, Request, Response } from "express";
 import prisma from "../utils/prisma.util";
 import {
   adminCreateMerchantSchema,
@@ -699,7 +699,97 @@ export const adminCreateMerchant = async (req: Request, res: Response) => {
     });
   }
 };
+/**
+ * @route   GET /api/auth/merchants/:merchantId
+ * @desc    Update merchant api's
+ * @access  Admin only
+ */
 
+export const adminUpdateMerchant = async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const { merchantId } = req.params;
+    const files = req.files as {
+      registrationDocument?: Express.Multer.File[];
+      taxDocument?: Express.Multer.File[];
+      identityDocument?: Express.Multer.File[];
+      additionalDocuments?: Express.Multer.File[];
+    };
+
+
+    const updateData: Record<string, any> = {};
+    const allowedFileds = ["businessName", "businessRegistrationNumber", "taxId", "businessType", "businessCategory", "address", "city", "state", "zipCode", "country", "businessPhone", "businessEmail", "website", "bankName", "accountNumber", "accountHolderName", "ifscCode", "swiftCode", "description", "registrationDocument", "taxDocument", "identityDocument", "additionalDocuments"];
+    
+    const sentFields = Object.keys(req.body);
+    const invalidFields = sentFields.filter((field) => !allowedFileds.includes(field));
+    
+    if (invalidFields.length > 0){
+      return res.status(400).json({
+        success: false,
+        message: `You cannot update the following fields: ${invalidFields.join(" ,")}`
+      })
+    }
+
+    for (const field of allowedFileds){
+      if (req.body[field] !== undefined){
+        updateData[field] = req.body[field]
+      }
+    }
+
+    const merchant = await prisma.merchantProfile.findFirst({
+      where:{
+        id: merchantId
+      }
+    });
+
+    if (files?.registrationDocument?.[0]) {
+      updateData.registrationDocument =
+        files.registrationDocument[0].path;
+    }
+
+    if (files?.taxDocument?.[0]) {
+      updateData.taxDocument = files.taxDocument[0].path;
+    }
+
+    if (files?.identityDocument?.[0]) {
+      updateData.identityDocument = files.identityDocument[0].path;
+    }
+
+    if (files?.additionalDocuments?.length) {
+      updateData.additionalDocuments = files.additionalDocuments.map(
+        (f) => f.path
+      );
+    }
+
+    if (merchant?.profileStatus === "VERIFIED"){
+        updateData.profileStatus = "VERIFIED";
+        const updateMerchant = await prisma.merchantProfile.update({
+        where:{
+          id: merchantId
+        },
+        data: updateData
+      })
+      if (!updateMerchant){
+        return res.status(400).json({
+          success: true,
+          message: "Your profile couldn't be updated"
+        });
+      }
+      return res.status(200).json({
+        success :true,
+        message: "Profile updated successfully.",
+        data: updateMerchant
+      })
+    }else{
+      return res.status(200).json({
+        success :false,
+        message: "This merchant profile cannot be updated at its current status.",
+      })
+    }
+
+  } catch (error: any) {
+    next(error);
+  }
+}
 
 /**
  * @route   GET /api/auth/admin/merchants/pending
@@ -888,7 +978,7 @@ export const getAllMerchants = async (req: Request, res: Response) => {
  * @desc    Admin delete merchant (soft delete or hard delete)
  * @access  Admin only
  */
-export const deleteMerchant = async (req: Request, res: Response) => {
+export const deleteMerchant = async (req: Request, res: Response, next: NextFunction) => {
   try {
     const authReq = req as AuthenticatedRequest;
     const { merchantId } = req.params;
@@ -960,9 +1050,9 @@ export const deleteMerchant = async (req: Request, res: Response) => {
       error: error.message,
     });
   }
-};
+};``
 
-export const updateMerchantData = async (req: Request, res: Response) => {
+export const updateMerchantData = async (req: Request, res: Response, next: NextFunction) => {
   try {
     const id = req.authUser?.userId;
     
@@ -1058,10 +1148,6 @@ export const updateMerchantData = async (req: Request, res: Response) => {
     })
 
   } catch (error: any) {
-    return res.status(500).json({
-      success: false,
-      message: "Error updating merchant data.",
-      error: error.message
-    })
+      next(error);
   }
 }

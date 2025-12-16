@@ -6,6 +6,7 @@ import { generateTokens, verifyRefreshToken } from "../utils/jwt.util";
 import { sendForgotPasswordOTP } from "../utils/email.util";
 import { otpGenerator } from "../helpers/otp/otpGenerator";
 import { ClientAuthentication, OAuth2Client } from "google-auth-library";
+import { use } from "passport";
 
 const prisma = new PrismaClient();
 const googleVerification = new OAuth2Client(process.env.GOOGLE_CLIENT_ID);
@@ -81,7 +82,7 @@ export const login = async (req: Request, res: Response) => {
       email: user.email,
       role: user.role,
       isVerified: user.merchantProfile?.isVerified || false,
-      profileStatus,
+      profileStatus: user.merchantProfile?.profileStatus,
     });
 
     const expiresAt = new Date();
