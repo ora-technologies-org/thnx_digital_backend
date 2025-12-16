@@ -799,10 +799,34 @@ export const adminUpdateMerchant = async (req: Request, res: Response, next: Nex
  */
 export const getPendingMerchants = async (req: Request, res: Response) => {
   try {
+    const { search, sort = "desc" } = req.query;
+
+    const whereClause: any = {
+      profileStatus: "PENDING_VERIFICATION",
+    };
+    if (search) {
+      whereClause.OR = [
+        {
+          businessName: {
+            contains: search as string,
+            mode: "insensitive",
+          },
+        },
+        {
+          user: {
+            email: {
+              contains: search as string,
+              mode: "insensitive",
+            },
+          },
+        },
+      ];
+    }
+
+    console.log(whereClause);
+
     const pendingMerchants = await prisma.merchantProfile.findMany({
-      where: {
-        profileStatus: "PENDING_VERIFICATION",
-      },
+      where: whereClause,
       include: {
         user: {
           select: {
@@ -815,7 +839,7 @@ export const getPendingMerchants = async (req: Request, res: Response) => {
         },
       },
       orderBy: {
-        createdAt: "desc",
+        createdAt: sort === "asc" ? "asc" : "desc",
       },
     });
 
@@ -1258,3 +1282,4 @@ export const updateMerchantData = async (req: Request, res: Response, next: Next
       next(error);
   }
 }
+
