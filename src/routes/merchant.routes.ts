@@ -17,6 +17,7 @@ import {
   generateAnalyticsPDF,
   createSupportTicket,
   getAllSupportTickets,
+  getSupportTicketById,
 } from "../controllers/merchant.controller";
 import {
   authenticate,
@@ -534,5 +535,6 @@ router.post("/support-ticket", authenticate, authorize("MERCHANT"), createSuppor
 
 
 router.get("/support-ticket", authenticate, authorize("ADMIN"), getAllSupportTickets);
+router.get("/support-ticket/:ticketId", authenticate, authorize("ADMIN"), getSupportTicketById);
 
 export default router;

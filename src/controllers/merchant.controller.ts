@@ -9,7 +9,7 @@ import { sendWelcomeEmail } from "../utils/email.util";
 import { AuthenticatedRequest } from "./auth.controller";
 import bcrypt from "bcrypt";
 import { generateTokens } from "../utils/jwt.util";
-import PDFDocument, { clip } from 'pdfkit';
+import PDFDocument, { clip, dash } from 'pdfkit';
 import { AnalyticsData } from "../interfaces/analyticsInterface";
 
 /**
@@ -1898,4 +1898,31 @@ export const getAllSupportTickets = async (req:Request, res: Response, next: Nex
   }
 }
 
-// export const updateSupportTicket = async (REq)
+export const getSupportTicketById = async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const { ticketId } = req.params;
+    const supportTicket = await prisma.supportTicket.findFirst({
+      where:{
+        id: ticketId
+      }
+    });
+    if (!ticketId){
+      return res.status(404).json({
+        success: true,
+        message: "No support ticket found with given id."
+      })
+    }
+    return res.status(200).json({
+      success: true,
+      message: "Support ticket fetched successfully",
+      data: supportTicket
+    });
+    
+  } catch (error: any) {
+    return res.status(500).json({
+      success: false,
+      message: "Error fetching support ticket",
+      error: error.message
+    })
+  }
+}
