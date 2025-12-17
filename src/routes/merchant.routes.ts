@@ -13,6 +13,8 @@ import {
   getMerchantById,
   getGiftCardByMerchant,
   getVerifiedMerchants,
+  getOverallAnalytics,
+  generateAnalyticsPDF,
 } from "../controllers/merchant.controller";
 import {
   authenticate,
@@ -524,5 +526,7 @@ router.get("/:merchantId", authenticate, authorize("ADMIN"), getMerchantById);
 
 router.get("/cards/:merchantId", authenticate, authorize("ADMIN"), getGiftCardByMerchant);
 router.get("/all/verified", authenticate, authorize("ADMIN"), getVerifiedMerchants);
+router.get("/analytics/business", authenticate, authorize("ADMIN"), getOverallAnalytics);
+router.get("/analytics/report", authenticate, authorize("ADMIN"), generateAnalyticsPDF);
 
 export default router;

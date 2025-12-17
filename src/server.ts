@@ -9,7 +9,6 @@ import giftCardRoutes from "./routes/giftCard.routes";
 import purchaseRoutes from "./routes/purchase.routes";
 import cors from "cors";
 import merchantRoutes from "./routes/merchant.routes";
-
 // Swagger
 import swaggerUi from "swagger-ui-express";
 import swaggerSpec from "./config/swagger.config";
@@ -159,6 +158,7 @@ app.use((req: Request, res: Response) => {
   });
 });
 app.use(errorHandler);
+
 
 
 // Error handler

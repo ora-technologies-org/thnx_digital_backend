@@ -9,7 +9,7 @@ import { sendWelcomeEmail } from "../utils/email.util";
 import { AuthenticatedRequest } from "./auth.controller";
 import bcrypt from "bcrypt";
 import { generateTokens } from "../utils/jwt.util";
-import { date } from "zod";
+import PDFDocument from 'pdfkit';
 
 /**
  * @route   POST /api/auth/merchant/register
@@ -1342,3 +1342,547 @@ export const getVerifiedMerchants = async (req: Request, res: Response, next: Ne
     })
   }
 }
+
+export const getAnalytics = async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const giftCard = await prisma.giftCard.findMany();
+    const purchases = await prisma.purchasedGiftCard.findMany();
+    const activeGiftCard = await prisma.giftCard.groupBy({
+      by: ["isActive"],
+      _count:{
+        id: true
+      }
+    });
+    const redemptions = await prisma.redemption.findMany()
+
+    const totalRevenue = purchases.reduce((sum, purchase) => sum + Number(purchase.purchaseAmount), 0)
+    const redemptionAmount = redemptions.reduce((sum, redemption) => sum + Number(redemption.amount), 0);
+
+
+    const popularGiftCards = await prisma.giftCard.findMany({
+      include: {
+        _count: {
+          select: {
+            purchases: true,
+          },
+        },
+      },
+      orderBy: {
+        purchases: {
+          _count: "desc",
+        },
+      },
+      take: 5,
+    });
+
+    const activeCount = {
+      activeCards: 0,
+      inactiveCards: 0
+    };
+
+    activeGiftCard.forEach((cards) => {
+      if (cards.isActive === true){
+        activeCount.activeCards = cards._count.id
+      }else if (cards.isActive === false){
+        activeCount.inactiveCards = cards._count.id
+      }
+    });
+    
+    let averagePurchaseAmount = totalRevenue/purchases.length
+    let redemptionRate = (redemptionAmount/totalRevenue) * 100
+    return res.status(200).json({
+      success: true,
+      message: "Gift card fetched successfully",
+      data: {
+        totalGiftCardIssued: giftCard.length,
+        totalRevenue: totalRevenue,
+        activeCards: activeCount.activeCards,
+        inActiveCards: activeCount.inactiveCards,
+        averagePurchaseAmount: averagePurchaseAmount,
+        redemptionRate: redemptionRate,
+        popularGiftCards: popularGiftCards,
+        giftCard: giftCard,
+        users: purchases
+      }
+    });
+
+  } catch (error: any) {
+    return res.status(500).json({
+      success: false,
+      message: "Error fetching analytics",
+      error: error.message
+    })
+  }
+}
+
+interface AnalyticsData {
+  totalGiftCardIssued: number;
+  totalRevenue: number;
+  activeCards: number;
+  inActiveCards: number;
+  totalPurchases: number;
+  totalRedemptions: number;
+  averagePurchaseAmount: number;
+  redemptionRate: number;
+  redemptionAmount: number;
+  outstandingBalance: number;
+  popularGiftCards: any[];
+  revenueByMonth: any[];
+  redemptionsByMonth: any[];
+  customerMetrics: {
+    totalCustomers: number;
+    repeatCustomers: number;
+    averageCustomerValue: number;
+  };
+  cardUtilization: {
+    fullyRedeemed: number;
+    partiallyRedeemed: number;
+    unused: number;
+    expired: number;
+  };
+}
+
+export const getOverallAnalytics = async (
+  req: Request,
+  res: Response,
+  next: NextFunction
+) => {
+  try {
+    const [giftCards, purchases, redemptions, activeGiftCard] = await Promise.all([
+      prisma.giftCard.findMany({
+        include: {
+          purchases: true,
+        },
+      }),
+      prisma.purchasedGiftCard.findMany({
+        include: {
+          redemptions: true,
+        },
+      }),
+      prisma.redemption.findMany(),
+      prisma.giftCard.groupBy({
+        by: ['isActive'],
+        _count: {
+          id: true,
+        },
+      }),
+    ]);
+
+    const totalRevenue = purchases.reduce(
+      (sum, purchase) => sum + Number(purchase.purchaseAmount),
+      0
+    );
+    const redemptionAmount = redemptions.reduce(
+      (sum, redemption) => sum + Number(redemption.amount),
+      0
+    );
+    const outstandingBalance = purchases.reduce(
+      (sum, purchase) => sum + Number(purchase.currentBalance),
+      0
+    );
+
+    const activeCount = {
+      activeCards: 0,
+      inactiveCards: 0,
+    };
+    activeGiftCard.forEach((cards) => {
+      if (cards.isActive === true) {
+        activeCount.activeCards = cards._count.id;
+      } else if (cards.isActive === false) {
+        activeCount.inactiveCards = cards._count.id;
+      }
+    });
+
+    const popularGiftCards = await prisma.giftCard.findMany({
+      include: {
+        _count: {
+          select: {
+            purchases: true,
+          },
+        },
+        purchases: {
+          select: {
+            purchaseAmount: true,
+          },
+        },
+      },
+      orderBy: {
+        purchases: {
+          _count: 'desc',
+        },
+      },
+      take: 5,
+    });
+
+    const popularGiftCardsWithRevenue = popularGiftCards.map((card) => ({
+      id: card.id,
+      title: card.title,
+      price: card.price,
+      totalSold: card._count.purchases,
+      totalRevenue: card.purchases.reduce(
+        (sum, p) => sum + Number(p.purchaseAmount),
+        0
+      ),
+    }));
+
+    // Revenue by month (last 12 months)
+    const revenueByMonth = await getRevenueByMonth(purchases);
+
+    // Redemptions by month (last 12 months)
+    const redemptionsByMonth = await getRedemptionsByMonth(redemptions);
+
+    // Customer metrics
+    const customerMetrics = getCustomerMetrics(purchases);
+
+    // Card utilization metrics
+    const cardUtilization = getCardUtilization(purchases);
+
+    // Calculate rates
+    const averagePurchaseAmount =
+      purchases.length > 0 ? totalRevenue / purchases.length : 0;
+    const redemptionRate =
+      totalRevenue > 0 ? (redemptionAmount / totalRevenue) * 100 : 0;
+
+    const analyticsData: AnalyticsData = {
+      totalGiftCardIssued: giftCards.length,
+      totalRevenue,
+      activeCards: activeCount.activeCards,
+      inActiveCards: activeCount.inactiveCards,
+      totalPurchases: purchases.length,
+      totalRedemptions: redemptions.length,
+      averagePurchaseAmount,
+      redemptionRate,
+      redemptionAmount,
+      outstandingBalance,
+      popularGiftCards: popularGiftCardsWithRevenue,
+      revenueByMonth,
+      redemptionsByMonth,
+      customerMetrics,
+      cardUtilization,
+    };
+
+    return res.status(200).json({
+      success: true,
+      message: 'Analytics fetched successfully',
+      data: analyticsData,
+    });
+  } catch (error: any) {
+    console.error('Analytics Error:', error);
+    return res.status(500).json({
+      success: false,
+      message: 'Error fetching analytics',
+      error: error.message,
+    });
+  }
+};
+
+export const generateAnalyticsPDF = async (
+  req: Request,
+  res: Response,
+  next: NextFunction
+) => {
+  try {
+    // Fetch analytics data (reuse logic from getOverallAnalytics)
+    const [giftCards, purchases, redemptions, activeGiftCard] = await Promise.all([
+      prisma.giftCard.findMany({
+        include: {
+          purchases: true,
+        },
+      }),
+      prisma.purchasedGiftCard.findMany({
+        include: {
+          redemptions: true,
+        },
+      }),
+      prisma.redemption.findMany(),
+      prisma.giftCard.groupBy({
+        by: ['isActive'],
+        _count: {
+          id: true,
+        },
+      }),
+    ]);
+
+    const totalRevenue = purchases.reduce(
+      (sum, purchase) => sum + Number(purchase.purchaseAmount),
+      0
+    );
+    const redemptionAmount = redemptions.reduce(
+      (sum, redemption) => sum + Number(redemption.amount),
+      0
+    );
+    const outstandingBalance = purchases.reduce(
+      (sum, purchase) => sum + Number(purchase.currentBalance),
+      0
+    );
+
+    const activeCount = { activeCards: 0, inactiveCards: 0 };
+    activeGiftCard.forEach((cards) => {
+      if (cards.isActive === true) {
+        activeCount.activeCards = cards._count.id;
+      } else {
+        activeCount.inactiveCards = cards._count.id;
+      }
+    });
+
+    const popularGiftCards = await prisma.giftCard.findMany({
+      include: {
+        _count: { select: { purchases: true } },
+        purchases: { select: { purchaseAmount: true } },
+      },
+      orderBy: { purchases: { _count: 'desc' } },
+      take: 5,
+    });
+
+    const customerMetrics = getCustomerMetrics(purchases);
+    const cardUtilization = getCardUtilization(purchases);
+    const redemptionRate =
+      totalRevenue > 0 ? (redemptionAmount / totalRevenue) * 100 : 0;
+
+    // Create PDF
+    const doc = new PDFDocument({ margin: 50, size: 'A4' });
+
+    // Set response headers
+    res.setHeader('Content-Type', 'application/pdf');
+    res.setHeader(
+      'Content-Disposition',
+      `attachment; filename=analytics-report-${new Date().toISOString().split('T')[0]}.pdf`
+    );
+
+    // Pipe PDF to response
+    doc.pipe(res);
+
+    // Add content to PDF
+    addPDFHeader(doc);
+    addOverviewSection(doc, {
+      totalRevenue,
+      totalPurchases: purchases.length,
+      totalRedemptions: redemptions.length,
+      outstandingBalance,
+      redemptionRate,
+    });
+    addGiftCardSection(doc, {
+      total: giftCards.length,
+      active: activeCount.activeCards,
+      inactive: activeCount.inactiveCards,
+    });
+    addCustomerSection(doc, customerMetrics);
+    addUtilizationSection(doc, cardUtilization);
+    addPopularCardsSection(doc, popularGiftCards);
+    addFooter(doc);
+
+    // Finalize PDF
+    doc.end();
+  } catch (error: any) {
+    console.error('PDF Generation Error:', error);
+    return res.status(500).json({
+      success: false,
+      message: 'Error generating PDF',
+      error: error.message,
+    });
+  }
+};
+
+// Helper functions
+function getRevenueByMonth(purchases: any[]) {
+  const monthlyData = new Map<string, number>();
+  const now = new Date();
+
+  // Initialize last 12 months
+  for (let i = 11; i >= 0; i--) {
+    const date = new Date(now.getFullYear(), now.getMonth() - i, 1);
+    const key = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`;
+    monthlyData.set(key, 0);
+  }
+
+  // Aggregate revenue by month
+  purchases.forEach((purchase) => {
+    const date = new Date(purchase.purchasedAt);
+    const key = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`;
+    if (monthlyData.has(key)) {
+      monthlyData.set(key, monthlyData.get(key)! + Number(purchase.purchaseAmount));
+    }
+  });
+
+  return Array.from(monthlyData.entries()).map(([month, revenue]) => ({
+    month,
+    revenue,
+  }));
+}
+
+function getRedemptionsByMonth(redemptions: any[]) {
+  const monthlyData = new Map<string, { count: number; amount: number }>();
+  const now = new Date();
+
+  for (let i = 11; i >= 0; i--) {
+    const date = new Date(now.getFullYear(), now.getMonth() - i, 1);
+    const key = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`;
+    monthlyData.set(key, { count: 0, amount: 0 });
+  }
+
+  redemptions.forEach((redemption) => {
+    const date = new Date(redemption.redeemedAt);
+    const key = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`;
+    if (monthlyData.has(key)) {
+      const current = monthlyData.get(key)!;
+      monthlyData.set(key, {
+        count: current.count + 1,
+        amount: current.amount + Number(redemption.amount),
+      });
+    }
+  });
+
+  return Array.from(monthlyData.entries()).map(([month, data]) => ({
+    month,
+    ...data,
+  }));
+}
+
+function getCustomerMetrics(purchases: any[]) {
+  const customerEmails = new Map<string, number>();
+
+  purchases.forEach((purchase) => {
+    const count = customerEmails.get(purchase.customerEmail) || 0;
+    customerEmails.set(purchase.customerEmail, count + 1);
+  });
+
+  const totalCustomers = customerEmails.size;
+  const repeatCustomers = Array.from(customerEmails.values()).filter(
+    (count) => count > 1
+  ).length;
+  const totalRevenue = purchases.reduce(
+    (sum, p) => sum + Number(p.purchaseAmount),
+    0
+  );
+  const averageCustomerValue =
+    totalCustomers > 0 ? totalRevenue / totalCustomers : 0;
+
+  return {
+    totalCustomers,
+    repeatCustomers,
+    averageCustomerValue,
+  };
+}
+
+function getCardUtilization(purchases: any[]) {
+  const now = new Date();
+  let fullyRedeemed = 0;
+  let partiallyRedeemed = 0;
+  let unused = 0;
+  let expired = 0;
+
+  purchases.forEach((purchase) => {
+    const balance = Number(purchase.currentBalance);
+    const isExpired = new Date(purchase.expiresAt) < now;
+
+    if (isExpired) {
+      expired++;
+    } else if (balance === 0) {
+      fullyRedeemed++;
+    } else if (balance < Number(purchase.purchaseAmount)) {
+      partiallyRedeemed++;
+    } else {
+      unused++;
+    }
+  });
+
+  return { fullyRedeemed, partiallyRedeemed, unused, expired };
+}
+
+// PDF Generation Helper Functions
+function addPDFHeader(doc: PDFKit.PDFDocument) {
+  doc
+    .fontSize(24)
+    .font('Helvetica-Bold')
+    .text('Gift Card Analytics Report', { align: 'center' })
+    .moveDown(0.5);
+
+  doc
+    .fontSize(12)
+    .font('Helvetica')
+    .text(`Generated on: ${new Date().toLocaleDateString()}`, { align: 'center' })
+    .moveDown(1.5);
+
+  doc
+    .moveTo(50, doc.y)
+    .lineTo(550, doc.y)
+    .stroke()
+    .moveDown(1);
+}
+
+function addOverviewSection(doc: PDFKit.PDFDocument, data: any) {
+  doc.fontSize(16).font('Helvetica-Bold').text('Overview', { underline: true }).moveDown(0.5);
+
+  doc.fontSize(11).font('Helvetica');
+  doc.text(`Total Revenue: $${data.totalRevenue.toFixed(2)}`);
+  doc.text(`Total Purchases: ${data.totalPurchases}`);
+  doc.text(`Total Redemptions: ${data.totalRedemptions}`);
+  doc.text(`Outstanding Balance: $${data.outstandingBalance.toFixed(2)}`);
+  doc.text(`Redemption Rate: ${data.redemptionRate.toFixed(2)}%`);
+  doc.moveDown(1.5);
+}
+
+function addGiftCardSection(doc: PDFKit.PDFDocument, data: any) {
+  doc.fontSize(16).font('Helvetica-Bold').text('Gift Card Status', { underline: true }).moveDown(0.5);
+
+  doc.fontSize(11).font('Helvetica');
+  doc.text(`Total Gift Cards: ${data.total}`);
+  doc.text(`Active Cards: ${data.active}`);
+  doc.text(`Inactive Cards: ${data.inactive}`);
+  doc.moveDown(1.5);
+}
+
+function addCustomerSection(doc: PDFKit.PDFDocument, data: any) {
+  doc.fontSize(16).font('Helvetica-Bold').text('Customer Metrics', { underline: true }).moveDown(0.5);
+
+  doc.fontSize(11).font('Helvetica');
+  doc.text(`Total Customers: ${data.totalCustomers}`);
+  doc.text(`Repeat Customers: ${data.repeatCustomers}`);
+  doc.text(`Average Customer Value: $${data.averageCustomerValue.toFixed(2)}`);
+  doc.moveDown(1.5);
+}
+
+function addUtilizationSection(doc: PDFKit.PDFDocument, data: any) {
+  doc.fontSize(16).font('Helvetica-Bold').text('Card Utilization', { underline: true }).moveDown(0.5);
+
+  doc.fontSize(11).font('Helvetica');
+  doc.text(`Fully Redeemed: ${data.fullyRedeemed}`);
+  doc.text(`Partially Redeemed: ${data.partiallyRedeemed}`);
+  doc.text(`Unused: ${data.unused}`);
+  doc.text(`Expired: ${data.expired}`);
+  doc.moveDown(1.5);
+}
+
+function addPopularCardsSection(doc: PDFKit.PDFDocument, cards: any[]) {
+  doc.fontSize(16).font('Helvetica-Bold').text('Top 5 Popular Gift Cards', { underline: true }).moveDown(0.5);
+
+  doc.fontSize(11).font('Helvetica');
+  cards.forEach((card, index) => {
+    const revenue = card.purchases.reduce(
+      (sum: number, p: any) => sum + Number(p.purchaseAmount),
+      0
+    );
+    doc.text(
+      `${index + 1}. ${card.title} - ${card._count.purchases} sold - $${revenue.toFixed(2)} revenue`
+    );
+  });
+  doc.moveDown(1.5);
+}
+
+function addFooter(doc: PDFKit.PDFDocument) {
+  const bottomMargin = 50;
+  doc
+    .fontSize(9)
+    .font('Helvetica')
+    .text(
+      'This report is confidential and intended for internal use only.',
+      50,
+      doc.page.height - bottomMargin,
+      { align: 'center', width: 500 }
+    );
+}
+
+export default {
+  getOverallAnalytics,
+  generateAnalyticsPDF,
+};
