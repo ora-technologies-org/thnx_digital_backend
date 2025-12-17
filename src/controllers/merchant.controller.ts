@@ -1785,5 +1785,3 @@ function addFooter(doc: PDFKit.PDFDocument) {
       { align: 'center', width: 500 }
     );
 }
-
-

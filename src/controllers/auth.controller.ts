@@ -1,9 +1,9 @@
-import { Request, Response } from "express";
+import { NextFunction, Request, Response } from "express";
 import bcrypt from "bcrypt";
 import { PrismaClient } from "@prisma/client";
 import { changePasswordSchema, loginSchema, resetPasswordSchema } from "../validators/auth.validator";
 import { generateTokens, verifyRefreshToken } from "../utils/jwt.util";
-import { sendForgotPasswordOTP } from "../utils/email.util";
+import { sendForgotPasswordOTP, sendPasswordResetSuccessEmail } from "../utils/email.util";
 import { otpGenerator } from "../helpers/otp/otpGenerator";
 import { ClientAuthentication, OAuth2Client } from "google-auth-library";
 import { use } from "passport";
@@ -729,6 +729,80 @@ export const resetPassword = async (req: Request, res: Response) => {
       success: false,
       message: "Error resetting your password",
       error: error.message
+    })
+  }
+}
+
+export const resetAdminPassword = async(req: Request, res: Response, next: NextFunction) => {
+  try {
+    const userId = req.authUser?.userId;
+    const parsedData = resetPasswordSchema.safeParse(req.body);
+    if (!parsedData.success) {
+      const errors = parsedData.error.issues.map((issue) => ({
+        field: issue.path[0],
+        message: issue.message,
+      }));
+
+      return res.status(400).json({
+        success: false,
+        errors,
+      });
+    }
+    const { email, password, newPassword, confirmPassword } = parsedData.data;
+    if (newPassword !== confirmPassword){
+      return res.status(400).json({
+        success: false,
+        message: "Passwords do not match."
+      })
+    }
+    const admin = await prisma.user.findFirst({
+      where:{
+        id: userId
+      }
+    });
+    if (!admin){
+      return res.status(500).json({
+        success: false,
+        message: "Admin not found with given email."
+      });
+    }
+    const compare = await bcrypt.compare(password, admin.password!);
+    if (!compare){
+      return res.status(400).json({
+        success: false,
+        message: "Invalid password."
+      })
+    }
+    const hashedPassword = await bcrypt.hash(confirmPassword, 10);
+    const updatePassword = await prisma.user.update({
+      where:{
+        id: userId
+      },data:{
+        password: hashedPassword
+      }
+    });
+    if (!updatePassword){
+      return res.status(400).json({
+        success: false,
+        message:"Your password could not be changed."
+      });
+    }
+    try {
+      const sendResetPasswordEmail = await sendPasswordResetSuccessEmail(email);
+    } catch (error) {
+      return res.status(500).json({
+        success: false,
+        message: "There was some error sending an email, passwords have been changed."
+      });
+    }
+    return res.status(200).json({
+      success: true,
+      message: "Passwords changed successfully."
+    })
+  } catch (error) {
+    return res.status(500).json({
+      success: false,
+      message: "Password couldn't be changed"
     })
   }
 }

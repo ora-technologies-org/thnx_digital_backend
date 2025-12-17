@@ -11,6 +11,7 @@ import {
   changePassword,
   googleLogin,
   resetPassword,
+  resetAdminPassword,
 } from "../controllers/auth.controller";
 import { authenticate, authorize } from "../middleware/auth.middleware";
 import { uploadMerchantDocs } from "../utils/multer";
@@ -465,4 +466,6 @@ router.post("/reset-password", changePassword);
 router.post("/google-login", googleLogin);
 
 router.post("/change-password", resetPassword);
+router.post("/admin-password",authenticate, authorize("ADMIN"), resetAdminPassword);
+
 export default router;

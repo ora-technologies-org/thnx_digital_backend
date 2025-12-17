@@ -288,3 +288,57 @@ export const sendForgotPasswordOTP = async (
     throw error;
   }
 };
+
+export const sendPasswordResetSuccessEmail = async (
+  to: string,
+) => {
+  if (!resend) {
+    console.log('Email not configured, skipping password reset success email to:', to);
+    return;
+  }
+
+  try {
+    await resend.emails.send({
+      from: 'THNX Digital <noreply@thnxdigital.com>',
+      to,
+      subject: 'Password Reset Successful',
+      html: `
+        <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px;">
+          <h2 style="color: #4CAF50;">Password Reset Successful ✓</h2>
+          
+          <div style="border: 2px solid #4CAF50; border-radius: 10px; padding: 20px; background-color: #f9f9f9;">
+            <p>Hi Admin,</p>  
+            
+            <p>Your password has been successfully reset.</p>
+            
+            <p><strong>Reset Date:</strong> ${new Date().toLocaleString()}</p>
+            
+            <div style="background-color: #fff; border-left: 4px solid #4CAF50; padding: 15px; margin: 20px 0;">
+              <p style="margin: 0; color: #333;">
+                You can now log in to your account using your new password.
+              </p>
+            </div>
+          </div>
+          
+          <div style="margin-top: 20px; padding: 15px; background-color: #fff3cd; border-radius: 5px;">
+            <p style="margin: 0; color: #856404; font-size: 14px;">
+              <strong>⚠️ Security Notice:</strong> If you did not make this change, please contact our support team immediately.
+            </p>
+          </div>
+          
+          <p style="margin-top: 20px; color: #666; font-size: 14px;">
+            Need help? <a href="${FRONTEND_URL}/support" style="color: #4CAF50;">Contact Support</a>
+          </p>
+          
+          <p style="color: #999; font-size: 12px; margin-top: 30px;">
+            This is an automated message, please do not reply to this email.
+          </p>
+        </div>
+      `,
+    });
+
+    console.log('Password reset success email sent to:', to);
+  } catch (error) {
+    console.error('Password reset success email error:', error);
+  }
+};
