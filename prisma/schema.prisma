@@ -245,5 +245,5 @@ model ChangePassword {
   otpExpiry           DateTime
   used                Boolean
   createdAt           DateTime @default(now())
-  updateAt            DateTime @updatedAt
+  updateAt           DateTime @updatedAt
 }
