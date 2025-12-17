@@ -13,6 +13,7 @@ import merchantRoutes from "./routes/merchant.routes";
 import swaggerUi from "swagger-ui-express";
 import swaggerSpec from "./config/swagger.config";
 import { errorHandler } from "./middleware/errorHandler";
+import userRoutes from "../src/routes/user.route"
 
 // Load environment variables
 dotenv.config();
@@ -149,6 +150,7 @@ app.use("/api/auth", authRoutes);
 app.use("/api/merchants", merchantRoutes);
 app.use("/api/gift-cards", giftCardRoutes);
 app.use("/api/purchases", purchaseRoutes);
+app.use("/api/users", userRoutes)
 
 // 404 handler
 app.use((req: Request, res: Response) => {
