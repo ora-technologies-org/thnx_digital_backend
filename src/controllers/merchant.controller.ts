@@ -9,7 +9,7 @@ import { sendWelcomeEmail } from "../utils/email.util";
 import { AuthenticatedRequest } from "./auth.controller";
 import bcrypt from "bcrypt";
 import { generateTokens } from "../utils/jwt.util";
-import PDFDocument from 'pdfkit';
+import PDFDocument, { clip } from 'pdfkit';
 import { AnalyticsData } from "../interfaces/analyticsInterface";
 
 /**
@@ -1788,11 +1788,11 @@ function addFooter(doc: PDFKit.PDFDocument) {
 
 export const createSupportTicket = async (req: Request, res: Response, next: NextFunction) => {
   try {
-    const { query } = req.body;
-    if (!query){
+    const { query, title } = req.body;
+    if (!query || !title){
       return res.status(400).json({
         success: false,
-        message: "Query is required to create a support ticket."
+        message: "Query and title are required to create a support ticket."
       });
     }
     const userId = req.authUser?.userId;
@@ -1810,6 +1810,7 @@ export const createSupportTicket = async (req: Request, res: Response, next: Nex
     const createTicket = await prisma.supportTicket.create({
       data:{
         merchantId: merchant.id,
+        title: title,
         merchantQuery: query
       }
     });
@@ -1834,3 +1835,67 @@ export const createSupportTicket = async (req: Request, res: Response, next: Nex
   }
 }
 
+export const getAllSupportTickets = async (req:Request, res: Response, next: NextFunction) => {
+  try {
+
+    const { search, sortBy= "createdAt", order = "desc" } = req.query;
+
+    const supportTickets = await prisma.supportTicket.findMany({
+      where: search 
+      ? {
+        OR: [
+          {
+            title: {
+              contains: String(search),
+              mode: "insensitive"
+            },
+          },
+          {
+            merchant: {
+              user: {
+                name: {
+                  contains: String(search),
+                  mode: "insensitive",
+                },
+              },
+            },
+          },
+          {
+            merchant: {
+              user: {
+                email: {
+                  contains: String(search),
+                  mode: "insensitive",
+                },
+              },
+            },
+          },
+        ],
+
+      }: undefined,
+      orderBy :{ 
+        createadAt: order === "asc" ? "asc" : "desc"
+      }
+    });
+    if (!supportTickets){
+      return res.status(400).json({
+        success: false,
+        message: "Couldn't fetch support tickets."
+      });
+    }
+    return res.status(200).json({
+      success: true,
+      message: "Fetched support tickets successfully.",
+      count: supportTickets.length,
+      data: supportTickets
+    });
+  } catch (error: any) {
+    return res.status(500).json({
+      success: false,
+      message: "Error fetching support tickets",
+      error: error.message
+    })
+  }
+}
+
+// export const updateSupportTicket = async (REq)

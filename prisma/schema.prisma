@@ -260,8 +260,8 @@ model SupportTicket{
   merchantId         String
 
   //merchantProfile table reference
-  mechant MerchantProfile @relation( fields: [merchantId], references: [id])
-
+  merchant MerchantProfile @relation( fields: [merchantId], references: [id])
+  title              String?
   merchantQuery      String?
   adminResponse      String?
 

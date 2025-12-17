@@ -16,6 +16,7 @@ import {
   getOverallAnalytics,
   generateAnalyticsPDF,
   createSupportTicket,
+  getAllSupportTickets,
 } from "../controllers/merchant.controller";
 import {
   authenticate,
@@ -523,13 +524,15 @@ router.put("/", authenticate, authorize("MERCHANT"), uploadMerchantDocs, updateM
 router.put("/:merchantId", authenticate, authorize("ADMIN"), uploadMerchantDocs, adminUpdateMerchant);
 
 
-router.get("/:merchantId", authenticate, authorize("ADMIN"), getMerchantById);
+// router.get("/:merchantId", authenticate, authorize("ADMIN"), getMerchantById);
 
 router.get("/cards/:merchantId", authenticate, authorize("ADMIN"), getGiftCardByMerchant);
 router.get("/all/verified", authenticate, authorize("ADMIN"), getVerifiedMerchants);
 router.get("/analytics/business", authenticate, authorize("ADMIN"), getOverallAnalytics);
 router.get("/analytics/report", authenticate, authorize("ADMIN"), generateAnalyticsPDF);
-
 router.post("/support-ticket", authenticate, authorize("MERCHANT"), createSupportTicket);
+
+
+router.get("/support-ticket", authenticate, authorize("ADMIN"), getAllSupportTickets);
 
 export default router;
