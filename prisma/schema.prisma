@@ -254,6 +254,7 @@ model ChangePassword {
 enum Status{
   OPEN
   CLOSE
+  IN_PROGRESS
 }
 model SupportTicket{
   id                 String @id @default(uuid())

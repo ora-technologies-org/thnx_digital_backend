@@ -1917,12 +1917,69 @@ export const getSupportTicketById = async (req: Request, res: Response, next: Ne
       message: "Support ticket fetched successfully",
       data: supportTicket
     });
-    
+
   } catch (error: any) {
     return res.status(500).json({
       success: false,
       message: "Error fetching support ticket",
       error: error.message
+    })
+  }
+}
+
+export const updateSupportTicket = async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const { ticketId } = req.params;
+    const { response, status } = req.body;
+    if (!response && !status){
+      return res.status(400).json({
+        success: false,
+        message: "Response and status are required to update the ticket."
+      })
+    }
+
+    if (status !== "CLOSE" && status !== "IN_PROGRESS"){
+      return res.status(400).json({
+        success: true,
+        message: "Status can either be CLOSE or IN_PROGRESS"
+      });
+    }
+    
+    const supportTicket = await prisma.supportTicket.findFirst({
+      where: {
+        id: ticketId
+      }
+    });
+    if (!supportTicket){
+      return res.status(404).json({
+        success: false,
+        message: "Support ticket not found!",
+      })
+    }
+    const updateSupportTicket = await prisma.supportTicket.update({
+      where:{
+        id: String(ticketId)
+      },
+      data:{
+        adminResponse: response,
+        status: status
+      }
+    })
+    if (!updateSupportTicket){
+      return res.status(400).json({
+        success: false, 
+        message: "Support Ticket couldn't be updated."
+      })
+    }
+    return res.status(200).json({
+      success: true,
+      message: "Support Ticket updated successfully.",
+      data: updateSupportTicket
+    })
+  } catch (error) {
+    return res.status(500).json({
+      success: false,
+      message: "Error updating support ticket"
     })
   }
 }
