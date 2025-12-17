@@ -2,6 +2,7 @@ import { NextFunction, Request, Response } from "express";
 import { createContactUsSchema } from "../validators/user.validator";
 import prisma from "../utils/prisma.util";
 import { sendContactUsAdminNotification, sendContactUsConfirmation } from "../utils/email.util";
+import { mode } from "crypto-js";
 
 export const createContactUs = async (req: Request, res: Response, next: NextFunction) => {
     try {
@@ -53,5 +54,46 @@ export const createContactUs = async (req: Request, res: Response, next: NextFun
             success: false,
             message: "Error creating contact us."
         })
+    }
+}
+
+export const getAllContactUs = async (req: Request, res: Response, next: NextFunction) => {
+    try {
+        const { search, order } = req.query;
+        const contact = await prisma.contactUs.findMany({
+            where: search
+            ? {
+                OR: [
+                {
+                    name:{
+                        contains: String(search),
+                        mode: "insensitive"
+                    }
+                },
+                {
+                    email: {
+                        contains: String(search),
+                        mode: "insensitive"
+                    }
+                }
+            ]
+        } : undefined,
+        orderBy :{ 
+            createdAt: order === "asc" ? "asc" : "desc"
+        }
+        })
+        if (!contact){
+            return res.status(400).json({
+                success: false,
+                message: "Contact us data not found."
+            })
+        }
+        return res.status(200).json({
+            success: true,
+            message: "Contact Us fetched successfully.",
+            data: contact
+        })
+    } catch (error) {
+        
     }
 }
