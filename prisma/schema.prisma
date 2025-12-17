@@ -151,6 +151,9 @@ model MerchantProfile {
   //giftCard limit
   giftCardLimit Int @default(10)
 
+  //reference
+  supportTicket SupportTicket[]
+
   // Timestamps
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -246,4 +249,17 @@ model ChangePassword {
   used                Boolean
   createdAt           DateTime @default(now())
   updateAt           DateTime @updatedAt
+}
+
+model SupportTicket{
+  id                 String @id @default(uuid())
+  merchantId         String
+
+  //merchantProfile table reference
+  mechant MerchantProfile @relation( fields: [merchantId], references: [id])
+
+  merchantQuery      String
+  adminResponse      String
+  createadAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 }
