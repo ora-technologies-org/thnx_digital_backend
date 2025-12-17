@@ -251,6 +251,10 @@ model ChangePassword {
   updateAt           DateTime @updatedAt
 }
 
+enum Status{
+  OPEN
+  CLOSE
+}
 model SupportTicket{
   id                 String @id @default(uuid())
   merchantId         String
@@ -258,8 +262,10 @@ model SupportTicket{
   //merchantProfile table reference
   mechant MerchantProfile @relation( fields: [merchantId], references: [id])
 
-  merchantQuery      String
-  adminResponse      String
+  merchantQuery      String?
+  adminResponse      String?
+
+  status             Status @default(OPEN)
   createadAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 }

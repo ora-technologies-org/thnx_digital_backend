@@ -1785,3 +1785,52 @@ function addFooter(doc: PDFKit.PDFDocument) {
       { align: 'center', width: 500 }
     );
 }
+
+export const createSupportTicket = async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const { query } = req.body;
+    if (!query){
+      return res.status(400).json({
+        success: false,
+        message: "Query is required to create a support ticket."
+      });
+    }
+    const userId = req.authUser?.userId;
+    const merchant = await prisma.merchantProfile.findUnique({
+      where:{
+        userId: userId
+      }
+    });
+    if (!merchant){
+      return res.status(404).json({
+        success: true,
+        message: "Merchant not found with given id."
+      });
+    }
+    const createTicket = await prisma.supportTicket.create({
+      data:{
+        merchantId: merchant.id,
+        merchantQuery: query
+      }
+    });
+    if (!createTicket){
+      return res.status(400).json({
+        success: false,
+        message: "Failed creating a support ticket"
+      });
+    }
+    return res.status(200).json({
+      success: true,
+      message: "Support ticket created succesfully.",
+      data: createTicket
+    });
+
+  } catch (error: any) {
+    return res.status(500).json({
+      success: false,
+      message: "Error creating support ticket.",
+      error: error.message
+    })
+  }
+}
+
