@@ -13,6 +13,7 @@ import { AnalyticsData } from "../interfaces/analyticsInterface";
 
 import { ActivityLogger } from "../services/activityLog.service";
 import { EmailService } from "../services/email.service";
+import { mode } from "crypto-js";
 /**
  * @route   POST /api/auth/merchant/register
  * @desc    Quick merchant registration (Step 1 - Minimal info)
@@ -2100,6 +2101,63 @@ export const updateSupportTicket = async (req: Request, res: Response, next: Nex
     return res.status(500).json({
       success: false,
       message: "Error updating support ticket"
+    })
+  }
+}
+
+
+export const getPurchaseOrders = async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const userId = req.authUser?.userId;
+    const { search, order } = req.query;
+    const merchant = await prisma.merchantProfile.findUnique({
+      where:{
+        userId: userId
+      }
+    });
+    if (!merchant){
+      return res.status(400).json({
+        success: false,
+        message: "Merchant not found with given id"
+      });
+    }
+
+    const orders = await prisma.purchasedGiftCard.findMany({
+      where: {
+        giftCard: {
+          merchantId: merchant.id
+        },
+        ...(search && {
+          OR: [
+            {
+              customerName: {
+                contains: String(search),
+                mode: "insensitive"
+              }
+            },
+            {
+              customerEmail: {
+                contains: String(search),
+                mode: "insensitive"
+              }
+            }
+          ]
+        })
+      },
+      orderBy: {
+        purchasedAt: order === "asc" ? "asc" : "desc"
+      }
+    });
+    return res.status(200).json({
+      success: true,
+      message: "Purchased orders fetched successfully",
+      data: orders
+    });
+
+  } catch (error) {
+    return res.status(500).json({
+      success: false,
+      message: "Error fetching purchase details."
     })
   }
 }

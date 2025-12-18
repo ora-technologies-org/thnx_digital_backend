@@ -220,7 +220,6 @@ model PurchasedGiftCard {
   lastUsedAt  DateTime?
 
   redemptions Redemption[]
-
   @@index([qrCode])
   @@index([customerEmail])
   @@index([giftCardId])
