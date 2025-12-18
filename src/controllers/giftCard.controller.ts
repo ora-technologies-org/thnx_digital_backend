@@ -685,3 +685,42 @@ export const updateSettings = async (req: Request, res: Response) => {
     })
   }
 }
+
+export const getCardSetting = async (req: Request, res: Response) => {
+  try {
+    const userId = req.authUser?.userId;
+    const merchant = await prisma.merchantProfile.findUnique({
+      where: {
+        userId: userId
+      }
+    });
+    if (!merchant){
+      return res.status(400).json({
+        success: false,
+        message: "No merchant found with given id."
+      });
+    }
+    const settings = await prisma.settings.findFirst({
+      where:{
+        merchantId: merchant.id
+      }
+    });
+    if (!settings){
+      return res.status(400).json({
+        success: false,
+        message: "No settings available."
+      });
+    }
+    return res.status(200).json({
+      success: true,
+      message: "Fetched card setting successfully.",
+      data: settings
+    })
+  } catch (error: any) {
+    return res.status(500).json({
+      success: false,
+      message: "Error fetching card settings",
+      error: error.message
+    })
+  }
+} 
