@@ -127,6 +127,19 @@ export const createSettingsSchema = z.object({
 });
 
 
+export const  udpateSettingSchema = z.object({
+  primaryColor: z.string().regex(/^#([0-9a-fA-F]{6})$/).default("#000000").optional(),
+  secondaryColor: z.string().regex(/^#([0-9a-fA-F]{6})$/).default("#FFFFFF").optional(),
+  gradientDirection: z.enum([
+    "LEFT_RIGHT",
+    "TOP_BOTTOM",
+    "TOP_RIGHT",
+    "BOTTOM_LEFT",
+  ]).optional(),
+  fontFamily: z.string().trim().optional(),
+})
+
 export type CreateGiftCardInput = z.infer<typeof createGiftCardSchema>;
 export type UpdateGiftCardInput = z.infer<typeof updateGiftCardSchema>;
 export type createSettingInput = z.infer<typeof createSettingsSchema>;
+export type updateSettingInput = z.infer<typeof udpateSettingSchema>;

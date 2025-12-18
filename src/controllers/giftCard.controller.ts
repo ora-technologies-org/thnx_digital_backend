@@ -3,10 +3,13 @@ import { Request, Response } from 'express';
 import { 
   createGiftCardSchema, 
   createSettingsSchema, 
+  udpateSettingSchema, 
   updateGiftCardSchema 
 } from '../validators/giftCard.validator';
 import prisma from '../utils/prisma.util';
 import { Decimal } from '@prisma/client/runtime/library';
+import { ActivityLogger } from '../services/activityLog.service';
+import { file, flushPages } from 'pdfkit';
 
 // const GIFT_CARD_LIMIT = 10;
 
@@ -96,6 +99,14 @@ export const createGiftCard = async (req: Request, res: Response) => {
         },
       },
     });
+
+     await ActivityLogger.giftCardCreated(
+      giftCard.id,
+      merchantId,
+      giftCard.title,
+      validatedData.price,
+      req
+    );
 
     return res.status(201).json({
       success: true,
@@ -315,23 +326,33 @@ export const updateGiftCard = async (req: Request, res: Response) => {
       });
     }
 
-    // Prepare update data
+
+    // Prepare update data and track changes
     const updateData: any = {};
+    const changes: Record<string, { from: any; to: any }> = {};
     
-    if (validatedData.title !== undefined) {
+    if (validatedData.title !== undefined && validatedData.title !== existingCard.title) {
       updateData.title = validatedData.title;
+      changes.title = { from: existingCard.title, to: validatedData.title };
     }
-    if (validatedData.description !== undefined) {
+    if (validatedData.description !== undefined && validatedData.description !== existingCard.description) {
       updateData.description = validatedData.description;
+      changes.description = { from: existingCard.description, to: validatedData.description };
     }
-    if (validatedData.price !== undefined) {
+    if (validatedData.price !== undefined && validatedData.price !== existingCard.price.toNumber()) {
       updateData.price = new Decimal(validatedData.price);
+      changes.price = { from: existingCard.price.toNumber(), to: validatedData.price };
     }
     if (validatedData.expiryDate !== undefined) {
-      updateData.expiryDate = new Date(validatedData.expiryDate);
+      const newExpiry = new Date(validatedData.expiryDate);
+      if (newExpiry.getTime() !== existingCard.expiryDate.getTime()) {
+        updateData.expiryDate = newExpiry;
+        changes.expiryDate = { from: existingCard.expiryDate, to: newExpiry };
+      }
     }
-    if (validatedData.isActive !== undefined) {
+    if (validatedData.isActive !== undefined && validatedData.isActive !== existingCard.isActive) {
       updateData.isActive = validatedData.isActive;
+      changes.isActive = { from: existingCard.isActive, to: validatedData.isActive };
     }
 
     // Update gift card
@@ -352,6 +373,25 @@ export const updateGiftCard = async (req: Request, res: Response) => {
         },
       },
     });
+
+    if (Object.keys(changes).length > 0) {
+      if (changes.isActive && changes.isActive.to === false) {
+        await ActivityLogger.giftCardDeactivated(
+          giftCard.id,
+          merchantId,
+          giftCard.title,
+          req
+        );
+      } else {
+        await ActivityLogger.giftCardUpdated(
+          giftCard.id,
+          merchantId,
+          giftCard.title,
+          changes,
+          req
+        );
+      }
+    }
 
     return res.status(200).json({
       success: true,
@@ -423,6 +463,20 @@ export const deleteGiftCard = async (req: Request, res: Response) => {
 
     // Check if gift card has been purchased
     if (existingCard._count.purchases > 0) {
+
+      await ActivityLogger.log({
+        actorId: merchantId,
+        actorType: 'merchant',
+        action: 'delete_failed',
+        category: 'GIFT_CARD',
+        description: `Cannot delete gift card "${existingCard.title}" - has ${existingCard._count.purchases} purchases`,
+        resourceType: 'gift_card',
+        resourceId: id,
+        metadata: { purchaseCount: existingCard._count.purchases },
+        merchantId,
+        severity: 'WARNING',
+        req
+      });
       return res.status(400).json({
         success: false,
         message: 'Cannot delete gift card that has been purchased. You can deactivate it instead.',
@@ -432,6 +486,23 @@ export const deleteGiftCard = async (req: Request, res: Response) => {
     // Delete gift card
     await prisma.giftCard.delete({
       where: { id },
+    });
+
+    await ActivityLogger.log({
+      actorId: merchantId,
+      actorType: 'merchant',
+      action: 'deleted',
+      category: 'GIFT_CARD',
+      description: `Gift card "${existingCard.title}" deleted`,
+      resourceType: 'gift_card',
+      resourceId: id,
+      metadata: { 
+        title: existingCard.title, 
+        price: existingCard.price.toNumber(),
+        expiryDate: existingCard.expiryDate
+      },
+      merchantId,
+      req
     });
 
     return res.status(200).json({
@@ -552,6 +623,66 @@ export const createSettings = async (req:Request, res: Response) => {
     return res.status(500).json({
       success: false,
       message: "Error creating settings",
+      error: error.message
+    })
+  }
+}
+
+export const updateSettings = async (req: Request, res: Response) => {
+  try {
+    const userId = req.authUser?.userId;
+
+    const merchant = await prisma.merchantProfile.findUnique({
+      where: { userId },
+    });
+
+    if (!merchant) {
+      return res.status(400).json({
+        success: false,
+        message: "No merchant found with the given id.",
+      });
+    }
+
+    const parsed = udpateSettingSchema.safeParse(req.body);
+
+    if (!parsed.success) {
+      return res.status(400).json({
+        success: false,
+        message: "Invalid settings data",
+        errors: parsed.error.flatten().fieldErrors,
+      });
+    }
+
+    const updateData = parsed.data;
+
+    if (Object.keys(updateData).length === 0) {
+      return res.status(400).json({
+        success: false,
+        message: "At least one field must be provided to update.",
+      });
+    }
+
+    const settings = await prisma.settings.update({
+      where: { merchantId: merchant.id },
+      data: updateData,
+    });
+
+    if (!settings){
+      return res.status(400).json({
+        success: false,
+        message: "Your settings couldn't be updated."
+      })
+    }
+    return res.status(200).json({
+      success: true,
+      message: "Settings updated successfully.",
+      data: settings
+    })
+
+  } catch (error: any) {
+    return res.status(500).json({
+      success: false,
+      message: "Error updating settings",
       error: error.message
     })
   }

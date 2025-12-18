@@ -325,3 +325,50 @@ enum GrandietDirection{
   TOP_RIGHT
   BOTTOM_LEFT
 }
+
+enum ActivityCategory {
+  AUTH
+  USER
+  MERCHANT
+  GIFT_CARD
+  PURCHASE
+  REDEMPTION
+  SYSTEM
+}
+
+enum ActivitySeverity {
+  INFO
+  WARNING
+  ERROR
+  CRITICAL
+}
+
+model ActivityLog {
+  id        String   @id @default(uuid())
+  createdAt DateTime @default(now())
+
+  actorId   String?
+  actorType String
+
+  action      String
+  category    ActivityCategory
+  description String
+
+  resourceType String?
+  resourceId   String?
+
+  metadata   Json?
+  severity   ActivitySeverity @default(INFO)
+
+  merchantId String?
+  ipAddress  String?
+  userAgent  String?
+
+  @@index([createdAt(sort: Desc)])
+  @@index([category])
+  @@index([actorId])
+  @@index([merchantId])
+  @@index([resourceType, resourceId])
+  @@index([severity])
+  @@map("activity_logs")
+}

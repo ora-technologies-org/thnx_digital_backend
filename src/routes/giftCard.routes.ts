@@ -7,6 +7,7 @@ import {
   deleteGiftCard,
   getActiveGiftCards,
   createSettings,
+  updateSettings,
 } from '../controllers/giftCard.controller';
 import {
   authenticate,
@@ -95,5 +96,7 @@ router.delete(
 
 
 router.post("/settings", authenticate, authorize("MERCHANT"), createSettings);
+router.put("/card/settings", authenticate, authorize("MERCHANT"), updateSettings);
+
 
 export default router;
