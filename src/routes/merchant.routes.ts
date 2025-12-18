@@ -27,7 +27,7 @@ import {
   requireCompleteProfile,
 } from "../middleware/auth.middleware";
 import { uploadMerchantDocs } from "../utils/multer";
-import { auth } from "google-auth-library";
+import { updateProfile } from "../controllers/admin.controller";
 
 const router = express.Router();
 
@@ -542,4 +542,5 @@ router.put("/support-ticket/:ticketId", authenticate, authorize("ADMIN"), update
 
 router.get("/orders", authenticate, authorize("MERCHANT"), getPurchaseOrders);
 
+router.put("/update/profile", authenticate, authorize("MERCHANT"), updateProfile)
 export default router;

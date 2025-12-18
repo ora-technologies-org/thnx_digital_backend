@@ -2,7 +2,7 @@ import { Request, Response, NextFunction } from "express";
 import prisma from "../utils/prisma.util";
 import { updateAdminProfileSchema } from "../validators/admin.validators";
 
-export const updateAdminProfile = async (req: Request, res: Response, next: NextFunction) => {
+export const updateProfile = async (req: Request, res: Response, next: NextFunction) => {
     try {
         const userId = req.authUser?.userId;
 
