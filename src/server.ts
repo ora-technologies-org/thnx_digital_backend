@@ -26,6 +26,7 @@ import { initializeSocket } from './config/socket.config';
 import path from "path";
 import { errorHandler } from './middleware/errorHandler';
 import userRoutes from "../src/routes/user.route"
+import adminRoutes from "../src/routes/admin.routes"
 
 dotenv.config();
 
@@ -247,6 +248,7 @@ app.use('/api/merchants', merchantRoutes);
 app.use('/api/gift-cards', giftCardRoutes);
 app.use('/api/purchases', purchaseRoutes);
 app.use('/api/activity-logs', activityLogRoutes);
+app.use('/api/admin', adminRoutes)
 
 // 404 handler
 app.use((req: Request, res: Response) => {
