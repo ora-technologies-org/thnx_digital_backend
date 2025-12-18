@@ -5,11 +5,12 @@ import {
   completeProfileSchema,
   merchantQuickRegisterSchema,
 } from "../validators/auth.validator";
-import { sendWelcomeEmail } from "../utils/email.util";
 import { AuthenticatedRequest } from "./auth.controller";
 import bcrypt from "bcrypt";
 import { generateTokens } from "../utils/jwt.util";
-
+import { ActivityLogger } from "../services/activityLog.service";
+import { EmailService } from "../services/email.service";
+import notificationService from "../services/notification.service";
 /**
  * @route   POST /api/auth/merchant/register
  * @desc    Quick merchant registration (Step 1 - Minimal info)
@@ -57,12 +58,19 @@ export const merchantRegister = async (req: Request, res: Response) => {
       return newUser;
     });
 
+    ActivityLogger.register(user.id, user.email, 'MERCHANT', req);
+
+      await notificationService.onMerchantRegistered(
+      user.id,
+      user.name || validatedData.name
+    );
+
+
     // Send welcome email with credentials
-    await sendWelcomeEmail(
+    EmailService.sendWelcomeEmail(
       user.email,
       user.name || "Merchant",
       validatedData.password, // Send original password (before hashing)
-      // validatedData.businessName,
     );
 
     const tokens = generateTokens({
@@ -211,6 +219,27 @@ export const completeProfile = async (req: Request, res: Response) => {
       },
     });
 
+    ActivityLogger.merchantProfileUpdated(
+      updatedProfile.id,
+      userId,
+      updatedProfile.businessName,
+      { action: 'profile_completed', documentsUploaded: Object.keys(documentData).filter(k => documentData[k as keyof typeof documentData]) },
+      req
+    );
+    
+    ActivityLogger.merchantSubmittedForVerification(
+      updatedProfile.id,
+      userId,
+      updatedProfile.businessName,
+      req
+    );
+
+      await notificationService.onProfileSubmittedForVerification(
+      userId,
+      updatedProfile.businessName,
+      updatedProfile.id
+    );
+
     const tokens = generateTokens({
       userId: userId,
       email: authReq.authUser!.email,
@@ -254,8 +283,7 @@ export const completeProfile = async (req: Request, res: Response) => {
  */
 export const getMerchantProfile = async (req: Request, res: Response) => {
   try {
-    // const userId = req.user?.id;
-    const userId = "1";
+    const userId = req.authUser?.userId;
 
     if (!userId) {
       return res.status(401).json({
@@ -356,8 +384,7 @@ export const getMerchantProfile = async (req: Request, res: Response) => {
  */
 export const resubmitProfile = async (req: Request, res: Response) => {
   try {
-    // const userId = req.user?.id;
-    const userId = "1";
+    const userId = req.authUser?.userId;
     const files = req.files as { [fieldname: string]: Express.Multer.File[] };
 
     if (!userId) {
@@ -470,6 +497,31 @@ export const resubmitProfile = async (req: Request, res: Response) => {
       },
     });
 
+    ActivityLogger.merchantProfileUpdated(
+      updatedProfile.id,
+      userId,
+      updatedProfile.businessName,
+      { action: 'resubmitted_after_rejection' },
+      req
+    );
+    
+    ActivityLogger.merchantSubmittedForVerification(
+      updatedProfile.id,
+      userId,
+      updatedProfile.businessName,
+      req
+    );
+
+    await notificationService.onProfileSubmittedForVerification(
+      userId,
+      updatedProfile.businessName,
+      updatedProfile.id
+    );
+
+
+
+
+
     return res.status(200).json({
       success: true,
       message:
@@ -505,7 +557,6 @@ export const resubmitProfile = async (req: Request, res: Response) => {
 export const updateMerchantProfile = async (req: Request, res: Response) => {
   try {
     const userId = req.authUser?.userId;
-    
     if (!userId) {
       return res.status(401).json({
         success: false,
@@ -547,6 +598,14 @@ export const updateMerchantProfile = async (req: Request, res: Response) => {
         },
       },
     });
+
+    ActivityLogger.merchantProfileUpdated(
+      updatedProfile.id,
+      userId,
+      updatedProfile.businessName,
+      { fieldsUpdated: Object.keys(updates) },
+      req
+    );
 
     return res.status(200).json({
       success: true,
@@ -610,7 +669,7 @@ export const adminCreateMerchant = async (req: Request, res: Response) => {
 
     const hashedPassword = await bcrypt.hash(validatedData.password, 10);
 
-    const user = await prisma.$transaction(async (tx) => {
+    const result = await prisma.$transaction(async (tx) => {
       const newUser = await tx.user.create({
         data: {
           email: validatedData.email,
@@ -625,7 +684,7 @@ export const adminCreateMerchant = async (req: Request, res: Response) => {
         },
       });
 
-      await tx.merchantProfile.create({
+      const merchantProfile = await tx.merchantProfile.create({
         data: {
           userId: newUser.id,
           businessName: validatedData.businessName,
@@ -658,15 +717,37 @@ export const adminCreateMerchant = async (req: Request, res: Response) => {
         },
       });
 
-      return newUser;
+      return { user: newUser, merchantProfile };
     });
 
-    // Send welcome email with credentials
-    await sendWelcomeEmail(
-      user.email,
-      user.name || "Merchant",
-      validatedData.password, // Send original password (before hashing)
+    // Log admin creating merchant
+    ActivityLogger.userCreated(result.user.id, result.user.email, adminId!, req);
+    
+    ActivityLogger.merchantProfileCreated(
+      result.merchantProfile.id,
+      result.user.id,
       validatedData.businessName,
+      req
+    );
+    
+    // Log auto-verification by admin
+    ActivityLogger.merchantVerified(
+      result.merchantProfile.id,
+      validatedData.businessName,
+      adminId!,
+      req
+    );
+
+    await notificationService.onProfileVerified(result.user.id);
+
+
+
+  
+
+    EmailService.sendWelcomeEmail(
+      result.user.email,
+      result.user.name || "Merchant",
+      validatedData.password,
     );
 
     return res.status(201).json({
@@ -674,10 +755,10 @@ export const adminCreateMerchant = async (req: Request, res: Response) => {
       message: "Merchant created and verified successfully",
       data: {
         user: {
-          id: user.id,
-          email: user.email,
-          name: user.name,
-          role: user.role,
+          id: result.user.id,
+          email: result.user.email,
+          name: result.user.name,
+          role: result.user.role,
         },
       },
     });
@@ -790,6 +871,7 @@ export const adminUpdateMerchant = async (req: Request, res: Response, next: Nex
     next(error);
   }
 }
+
 
 /**
  * @route   GET /api/auth/admin/merchants/pending
@@ -914,6 +996,28 @@ export const verifyMerchant = async (req: Request, res: Response) => {
       },
     });
 
+    if (action === "approve") {
+      ActivityLogger.merchantVerified(
+        updatedProfile.id,
+        updatedProfile.businessName,
+        adminId!,
+        req
+      );
+
+      await notificationService.onProfileVerified(merchantId);
+    } else {
+      ActivityLogger.merchantRejected(
+        updatedProfile.id,
+        updatedProfile.businessName,
+        adminId!,
+        rejectionReason,
+        req
+      );
+
+      await notificationService.onProfileRejected(merchantId, rejectionReason);
+
+    }
+
     return res.status(200).json({
       success: true,
       message: `Merchant ${action === "approve" ? "approved" : "rejected"} successfully`,
@@ -983,6 +1087,8 @@ export const deleteMerchant = async (req: Request, res: Response, next: NextFunc
     const authReq = req as AuthenticatedRequest;
     const { merchantId } = req.params;
     const { hardDelete = false } = req.body; // Optional: permanently delete
+    const adminId = authReq.authUser?.userId;
+
 
     const merchantProfile = await prisma.merchantProfile.findUnique({
       where: { userId: merchantId },
@@ -1011,11 +1117,31 @@ export const deleteMerchant = async (req: Request, res: Response, next: NextFunc
           where: { userId: merchantId },
         });
 
+
+
         // Delete user
         await tx.user.delete({
           where: { id: merchantId },
         });
       });
+
+      ActivityLogger.log({
+        actorId: adminId,
+        actorType: 'admin',
+        action: 'hard_deleted',
+        category: 'MERCHANT',
+        description: `Merchant "${merchantProfile.businessName}" permanently deleted`,
+        resourceType: 'merchant_profile',
+        resourceId: merchantProfile.id,
+        metadata: { 
+          merchantEmail: merchantProfile.user.email,
+          businessName: merchantProfile.businessName 
+        },
+        severity: 'WARNING',
+        req
+      });
+
+
 
       return res.status(200).json({
         success: true,
@@ -1032,6 +1158,9 @@ export const deleteMerchant = async (req: Request, res: Response, next: NextFunc
       await prisma.refreshToken.deleteMany({
         where: { userId: merchantId },
       });
+
+      ActivityLogger.userDeactivated(merchantId, adminId!, req);
+
 
       return res.status(200).json({
         success: true,
