@@ -44,3 +44,5 @@ prisma/migrations/
 .cache/
 tmp/
 temp/
+
+uploads/
