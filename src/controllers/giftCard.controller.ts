@@ -80,8 +80,6 @@ export const createGiftCard = async (req: Request, res: Response) => {
         description: validatedData.description,
         price: new Decimal(validatedData.price),
         expiryDate: new Date(validatedData.expiryDate),
-        primaryColor: validatedData.primaryColor,
-        secondaryColor: validatedData.secondaryColor || null,
         merchantLogo: merchant.businessLogo,
       },
       include: {

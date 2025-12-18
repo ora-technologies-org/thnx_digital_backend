@@ -184,8 +184,6 @@ model GiftCard {
   purchases PurchasedGiftCard[]
 
   //design
-  primaryColor String?
-  secondaryColor String?
   merchantLogo String?
 
   //status 
