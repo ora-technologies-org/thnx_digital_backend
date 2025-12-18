@@ -2,6 +2,7 @@
 import { Request, Response } from 'express';
 import { 
   createGiftCardSchema, 
+  createSettingsSchema, 
   updateGiftCardSchema 
 } from '../validators/giftCard.validator';
 import prisma from '../utils/prisma.util';
@@ -498,3 +499,60 @@ export const getActiveGiftCards = async (req: Request, res: Response) => {
     });
   }
 };
+
+export const createSettings = async (req:Request, res: Response) => {
+  try {
+    const userId = req.authUser?.userId;
+    const parsedData = createSettingsSchema.safeParse(req.body);
+    if (!parsedData.success) {
+      const errors = parsedData.error.issues.map((issue) => ({
+        field: issue.path[0],
+        message: issue.message,
+      }));
+
+      return res.status(400).json({
+        success: false,
+        errors,
+      });
+    }
+    const { primaryColor, secondaryColor, gradientDirection, fontFamily } = parsedData.data
+    const merchant = await prisma.merchantProfile.findUnique({
+      where:{
+        userId: userId
+      }
+    });
+    if (!merchant){
+      return res.status(404).json({
+        success: false,
+        message: "Merchant not found with the given id."
+      });
+    }
+    const settings = await prisma.settings.create({
+      data:{
+        merchantId: merchant.id,
+        primaryColor: primaryColor,
+        secondaryColor: secondaryColor,
+        gradientDirection: gradientDirection,
+        fontFamily: fontFamily,
+      }
+    });
+    if (!settings){
+      return res.status(400).json({
+        success: false, 
+        message: "Coudln't create settings for gift card."
+      });
+    }   
+    return res.status(200).json({
+      success: true,
+      message: "Created settings for gift card successfully.",
+      data: settings
+    });
+
+  } catch (error: any) {
+    return res.status(500).json({
+      success: false,
+      message: "Error creating settings",
+      error: error.message
+    })
+  }
+}

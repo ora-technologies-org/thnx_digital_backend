@@ -154,6 +154,8 @@ model MerchantProfile {
 
   //reference
   supportTicket SupportTicket[]
+  settings      Settings[]
+
 
   // Timestamps
   createdAt DateTime @default(now())
@@ -298,4 +300,28 @@ model ContactUs{
   message           String
   createdAt         DateTime @default(now())
   updatedAt         DateTime @updatedAt
+}
+
+model Settings{
+  id                String @id @default(uuid())
+
+  //merchant
+  merchantId        String @unique
+  merchant          MerchantProfile @relation(fields: [merchantId], references: [id])
+
+  //design
+  primaryColor      String   @default("#000000")
+  secondaryColor    String   @default("#FFFFFF")
+  gradientDirection GrandietDirection @default(LEFT_RIGHT)
+  fontFamily        String?
+
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+}
+
+enum GrandietDirection{
+  LEFT_RIGHT
+  TOP_BOTTOM
+  TOP_RIGHT
+  BOTTOM_LEFT
 }

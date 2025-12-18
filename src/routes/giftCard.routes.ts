@@ -6,6 +6,7 @@ import {
   updateGiftCard,
   deleteGiftCard,
   getActiveGiftCards,
+  createSettings,
 } from '../controllers/giftCard.controller';
 import {
   authenticate,
@@ -91,5 +92,8 @@ router.delete(
   requireVerification, // Only verified merchants can delete
   deleteGiftCard
 );
+
+
+router.post("/settings", authenticate, authorize("MERCHANT"), createSettings);
 
 export default router;
