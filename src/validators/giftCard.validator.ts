@@ -33,6 +33,9 @@ export const createGiftCardSchema = z.object({
       today.setHours(0, 0, 0, 0); // Start of today
       return date > today;
     }, 'Expiry date must be in the future'),
+    primaryColor: z.string(),
+    secondaryColor: z.string().optional(),
+
 });
 
 // Update Gift Card Schema

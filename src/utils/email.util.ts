@@ -14,7 +14,6 @@ console.log('📧 Email util loaded. Resend configured:', !!resend, 'API Key pre
 export const sendWelcomeEmail = async (
   to: string,
   name: string,
-  password: string,
   businessName?: string
 ) => {
   if (!resend) {
@@ -38,7 +37,6 @@ export const sendWelcomeEmail = async (
           <div style="background-color: #f9f9f9; border: 1px solid #ddd; border-radius: 8px; padding: 20px; margin: 20px 0;">
             <h3 style="margin-top: 0;">Your Login Credentials:</h3>
             <p><strong>Email:</strong> ${to}</p>
-            <p><strong>Password:</strong> ${password}</p>
             <p style="color: #e74c3c; font-size: 14px;">⚠️ Please change your password after first login!</p>
           </div>
           

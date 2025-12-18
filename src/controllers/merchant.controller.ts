@@ -9,8 +9,9 @@ import { sendWelcomeEmail } from "../utils/email.util";
 import { AuthenticatedRequest } from "./auth.controller";
 import bcrypt from "bcrypt";
 import { generateTokens } from "../utils/jwt.util";
-import PDFDocument, { clip, dash } from 'pdfkit';
+import PDFDocument, { clip, dash, file } from 'pdfkit';
 import { AnalyticsData } from "../interfaces/analyticsInterface";
+import { Console } from "console";
 
 /**
  * @route   POST /api/auth/merchant/register
@@ -44,6 +45,7 @@ export const merchantRegister = async (req: Request, res: Response) => {
           role: "MERCHANT",
           emailVerified: false,
           isActive: true,
+          isFirstTime: false
         },
       });
 
@@ -167,6 +169,7 @@ export const completeProfile = async (req: Request, res: Response) => {
     }
 
     const documentData = {
+      businessLogo: files?.businessLogo?.[0].path || "uploads/merchant-documents/static_logo.svg",
       registrationDocument: files?.registrationDocument?.[0]?.path || null,
       taxDocument: files?.taxDocument?.[0]?.path || null,
       identityDocument: files?.identityDocument?.[0]?.path,
@@ -176,6 +179,7 @@ export const completeProfile = async (req: Request, res: Response) => {
     const updatedProfile = await prisma.merchantProfile.create({
       data: {
         businessName: validatedData.businessName!,
+        businessLogo: documentData.businessLogo,
         businessRegistrationNumber: validatedData.businessRegistrationNumber,
         taxId: validatedData.taxId,
         businessType: validatedData.businessType,
@@ -608,6 +612,7 @@ export const adminCreateMerchant = async (req: Request, res: Response) => {
         taxDocument: files?.taxDocument?.[0]?.path || null,
         identityDocument: files?.identityDocument?.[0]?.path,
         additionalDocuments: files?.additionalDocuments?.map((f) => f.path) || [],
+        businessLogo: files?.businessLogo?.[0].path || "uploads/merchant-documents/static_logo.svg"
     };
 
     const hashedPassword = await bcrypt.hash(validatedData.password, 10);
@@ -631,6 +636,7 @@ export const adminCreateMerchant = async (req: Request, res: Response) => {
         data: {
           userId: newUser.id,
           businessName: validatedData.businessName,
+          businessLogo: documentData.businessLogo,
           businessRegistrationNumber: validatedData.businessRegistrationNumber,
           taxId: validatedData.taxId,
           businessType: validatedData.businessType,
@@ -667,7 +673,6 @@ export const adminCreateMerchant = async (req: Request, res: Response) => {
     await sendWelcomeEmail(
       user.email,
       user.name || "Merchant",
-      validatedData.password, // Send original password (before hashing)
       validatedData.businessName,
     );
 
@@ -715,11 +720,12 @@ export const adminUpdateMerchant = async (req: Request, res: Response, next: Nex
       taxDocument?: Express.Multer.File[];
       identityDocument?: Express.Multer.File[];
       additionalDocuments?: Express.Multer.File[];
+      businessLogo?: Express.Multer.File[];
     };
 
 
     const updateData: Record<string, any> = {};
-    const allowedFileds = ["businessName", "businessRegistrationNumber", "taxId", "businessType", "businessCategory", "address", "city", "state", "zipCode", "country", "businessPhone", "businessEmail", "website", "bankName", "accountNumber", "accountHolderName", "ifscCode", "swiftCode", "description", "registrationDocument", "taxDocument", "identityDocument", "additionalDocuments", "giftCardLimit"];
+    const allowedFileds = ["businessName", "businessRegistrationNumber", "taxId", "businessType", "businessCategory", "address", "city", "state", "zipCode", "country", "businessPhone", "businessEmail", "website", "bankName", "accountNumber", "accountHolderName", "ifscCode", "swiftCode", "description", "registrationDocument", "taxDocument", "identityDocument", "additionalDocuments", "giftCardLimit", "businessLogo"];
     
     const sentFields = Object.keys(req.body);
     const invalidFields = sentFields.filter((field) => !allowedFileds.includes(field));
@@ -754,6 +760,10 @@ export const adminUpdateMerchant = async (req: Request, res: Response, next: Nex
 
     if (files?.identityDocument?.[0]) {
       updateData.identityDocument = files.identityDocument[0].path;
+    }
+
+    if (files?.businessLogo?.[0]) {
+      updateData.businessLogo = files.businessLogo[0].path;
     }
 
     if (files?.additionalDocuments?.length) {
@@ -1190,17 +1200,18 @@ export const updateMerchantData = async (req: Request, res: Response, next: Next
   try {
     const id = req.authUser?.userId;
     
-
+    console.log(req.body);
     const files = req.files as {
       registrationDocument?: Express.Multer.File[];
       taxDocument?: Express.Multer.File[];
       identityDocument?: Express.Multer.File[];
       additionalDocuments?: Express.Multer.File[];
+      businessLogo?: Express.Multer.File[];
     };
 
 
     const updateData: Record<string, any> = {};
-    const allowedFileds = ["businessName", "businessRegistrationNumber", "taxId", "businessType", "businessCategory", "address", "city", "state", "zipCode", "country", "businessPhone", "businessEmail", "website", "bankName", "accountNumber", "accountHolderName", "ifscCode", "swiftCode", "description", "registrationDocument", "taxDocument", "identityDocument", "additionalDocuments"];
+    const allowedFileds = ["businessName", "businessRegistrationNumber", "taxId", "businessType", "businessCategory", "address", "city", "state", "zipCode", "country", "businessPhone", "businessEmail", "website", "bankName", "accountNumber", "accountHolderName", "ifscCode", "swiftCode", "description", "registrationDocument", "taxDocument", "identityDocument", "additionalDocuments", "businessLogo"];
     
     const sentFields = Object.keys(req.body);
     const invalidFields = sentFields.filter((field) => !allowedFileds.includes(field));
@@ -1253,6 +1264,9 @@ export const updateMerchantData = async (req: Request, res: Response, next: Next
 
     if (files?.identityDocument?.[0]) {
       updateData.identityDocument = files.identityDocument[0].path;
+    }
+    if (files?.businessLogo?.[0]) {
+      updateData.businessLogo = files.businessLogo[0].path;
     }
 
     if (files?.additionalDocuments?.length) {

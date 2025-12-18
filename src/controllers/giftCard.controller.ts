@@ -67,7 +67,7 @@ export const createGiftCard = async (req: Request, res: Response) => {
         message: `You have reached the maximum limit of ${merchant.giftCardLimit} active gift cards`,
       });
     }
-
+    console.log(merchant)
     // Create gift card
     const giftCard = await prisma.giftCard.create({
       data: {
@@ -76,6 +76,9 @@ export const createGiftCard = async (req: Request, res: Response) => {
         description: validatedData.description,
         price: new Decimal(validatedData.price),
         expiryDate: new Date(validatedData.expiryDate),
+        primaryColor: validatedData.primaryColor,
+        secondaryColor: validatedData.secondaryColor || null,
+        merchantLogo: merchant.businessLogo,
       },
       include: {
         merchant: {

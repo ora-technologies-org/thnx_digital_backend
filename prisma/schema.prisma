@@ -100,6 +100,7 @@ model MerchantProfile {
 
   // Business Information
   businessName               String
+  businessLogo               String?
   businessRegistrationNumber String? @unique
   taxId                      String?
   businessType               String?
@@ -161,6 +162,12 @@ model MerchantProfile {
   @@map("merchant_profiles")
 }
 
+enum GiftCardStatus{
+  ACTIVE
+  EXPIRED
+  DEACTIVATED
+}
+
 model GiftCard {
   id         String @id @default(uuid())
   merchantId String
@@ -173,6 +180,14 @@ model GiftCard {
   isActive    Boolean  @default(true)
 
   purchases PurchasedGiftCard[]
+
+  //design
+  primaryColor String?
+  secondaryColor String?
+  merchantLogo String?
+
+  //status 
+  status GiftCardStatus @default(ACTIVE)
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt

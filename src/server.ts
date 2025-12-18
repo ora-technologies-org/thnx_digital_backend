@@ -14,6 +14,7 @@ import swaggerUi from "swagger-ui-express";
 import swaggerSpec from "./config/swagger.config";
 import { errorHandler } from "./middleware/errorHandler";
 import userRoutes from "../src/routes/user.route"
+import path from "path";
 
 // Load environment variables
 dotenv.config();
@@ -79,6 +80,14 @@ app.use(
     },
   })
 );
+
+
+//
+app.use(
+  "/uploads",
+  express.static(path.join(__dirname, "..", "uploads"))
+);
+
 
 // Initialize Passport
 configurePassport();
