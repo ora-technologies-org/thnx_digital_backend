@@ -44,9 +44,11 @@ export const createGiftCard = async (req: Request, res: Response) => {
     const merchant = await prisma.merchantProfile.findUnique({
       where:{
         userId: merchantId
+      },include:{
+        settings: true
       }
     });
-
+    
     if (!merchant){
       return res.status(404).json({
         success: false,
@@ -71,7 +73,6 @@ export const createGiftCard = async (req: Request, res: Response) => {
         message: `You have reached the maximum limit of ${merchant.giftCardLimit} active gift cards`,
       });
     }
-    console.log(merchant)
     // Create gift card
     const giftCard = await prisma.giftCard.create({
       data: {
@@ -109,7 +110,7 @@ export const createGiftCard = async (req: Request, res: Response) => {
     return res.status(201).json({
       success: true,
       message: 'Gift card created successfully',
-      data: { giftCard },
+      data: { giftCard, settings: merchant.settings},
     });
   } catch (error: any) {
     console.error('Create gift card error:', error);
@@ -149,6 +150,9 @@ export const getMyGiftCards = async (req: Request, res: Response) => {
     const merchant = await prisma.merchantProfile.findUnique({
       where:{
         userId: merchantId
+      },
+      include:{
+        settings: true
       }
     });
 
@@ -158,6 +162,7 @@ export const getMyGiftCards = async (req: Request, res: Response) => {
         message: "Merchant not found with given Id."
       })
     }
+
     const giftCards = await prisma.giftCard.findMany({
       where: { merchantId },
       orderBy: { createdAt: 'desc' },
@@ -188,6 +193,7 @@ export const getMyGiftCards = async (req: Request, res: Response) => {
       success: true,
       data: { 
         giftCards,
+        settings: merchant.settings,
         total: giftCards.length,
         activeCards: activeCardsCount,
         limit: merchant.giftCardLimit,
@@ -220,6 +226,21 @@ export const getGiftCardById = async (req: Request, res: Response) => {
       return res.status(401).json({
         success: false,
         message: 'Unauthorized',
+      });
+    }
+
+    const merchant = await prisma.merchantProfile.findUnique({
+      where:{
+        userId: merchantId
+      },include:{
+        settings: true
+      }
+    });
+    
+    if (!merchant){
+      return res.status(400).json({
+        success: false,
+        message: "No merchant found with given id."
       });
     }
 
@@ -271,7 +292,10 @@ export const getGiftCardById = async (req: Request, res: Response) => {
 
     return res.status(200).json({
       success: true,
-      data: { giftCard },
+      data: { 
+        giftCard,
+        settings: merchant.settings
+      },
     });
   } catch (error: any) {
     console.error('Get gift card error:', error);
