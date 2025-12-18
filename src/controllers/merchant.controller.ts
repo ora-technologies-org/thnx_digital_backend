@@ -62,7 +62,7 @@ export const merchantRegister = async (req: Request, res: Response) => {
 
       await notificationService.onMerchantRegistered(
       user.id,
-      user.name || validatedData.businessName
+      user.name || validatedData.name
     );
 
 
@@ -71,7 +71,6 @@ export const merchantRegister = async (req: Request, res: Response) => {
       user.email,
       user.name || "Merchant",
       validatedData.password, // Send original password (before hashing)
-      // validatedData.businessName,
     );
 
     const tokens = generateTokens({
