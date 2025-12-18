@@ -9,7 +9,9 @@ import {
   generateQRCodeString,
   generateQRCodeImage,
 } from "../utils/qrcode.util";
-import { sendGiftCardEmail } from "../utils/email.util";
+import { ActivityLogger } from "../services/activityLog.service";
+import { EmailService } from "../services/email.service";
+import notificationService from "../services/notification.service";
 
 // Define authenticated request interface
 interface AuthenticatedRequest extends Request {
@@ -49,6 +51,21 @@ export const purchaseGiftCard = async (req: Request, res: Response) => {
     }
 
     if (!giftCard.isActive) {
+
+       ActivityLogger.log({
+        actorType: 'user',
+        action: 'purchase_failed',
+        category: 'PURCHASE',
+        description: `Purchase failed - gift card "${giftCard.title}" is inactive`,
+        resourceType: 'gift_card',
+        resourceId: giftCardId,
+        metadata: { customerEmail: validatedData.customerEmail, reason: 'inactive' },
+        merchantId: giftCard.merchantId,
+        severity: 'WARNING',
+        req
+      });
+
+
       return res.status(400).json({
         success: false,
         message: "This gift card is no longer available",
@@ -57,6 +74,19 @@ export const purchaseGiftCard = async (req: Request, res: Response) => {
 
     // Check if gift card is expired
     if (new Date() > giftCard.expiryDate) {
+
+      ActivityLogger.log({
+        actorType: 'user',
+        action: 'purchase_failed',
+        category: 'PURCHASE',
+        description: `Purchase failed - gift card "${giftCard.title}" is expired`,
+        resourceType: 'gift_card',
+        resourceId: giftCardId,
+        metadata: { customerEmail: validatedData.customerEmail, reason: 'expired', expiryDate: giftCard.expiryDate },
+        merchantId: giftCard.merchantId,
+        severity: 'WARNING',
+        req
+      });
       return res.status(400).json({
         success: false,
         message: "This gift card has expired",
@@ -94,13 +124,54 @@ export const purchaseGiftCard = async (req: Request, res: Response) => {
       },
     });
 
-    // ✅ FIXED: Generate QR code image with ONLY the QR code ID
-    // Not the balance or other dynamic data!
+    ActivityLogger.purchaseCreated(
+      purchasedCard.id,
+      giftCard.title,
+      validatedData.customerEmail,
+      giftCard.price.toNumber(),
+      giftCard.merchantId,
+      req
+    );
+
+    // Log payment status
+    if (validatedData.transactionId) {
+      ActivityLogger.paymentCompleted(
+        purchasedCard.id,
+        validatedData.transactionId,
+        giftCard.price.toNumber(),
+        giftCard.merchantId
+      );
+    }
+
+      await notificationService.onPurchaseMade(
+      purchasedCard.id,
+      giftCard.title,
+      giftCard.price.toNumber(),
+      validatedData.customerName,
+      giftCard.merchantId
+    );
+
+    // 🔔 NOTIFICATION: Notify merchant about their gift card being purchased
+    await notificationService.onGiftCardPurchased(
+      giftCard.merchantId,
+      purchasedCard.id,
+      giftCard.title,
+      validatedData.customerName,
+
+      giftCard.price.toNumber().toString()
+    );
+
+
+
+
+
+
+  
     const qrCodeImage = await generateQRCodeImage(purchasedCard.qrCode);
 
     // Send email with gift card (continue even if email fails)
     try {
-      await sendGiftCardEmail(
+      EmailService.sendGiftCardEmail(
         purchasedCard.customerEmail,
         purchasedCard,
         qrCodeImage,
@@ -108,7 +179,20 @@ export const purchaseGiftCard = async (req: Request, res: Response) => {
     } catch (emailError) {
       console.error("Failed to send email:", emailError);
       // Continue - user still gets the response
+
+      ActivityLogger.log({
+        actorType: 'system',
+        action: 'email_failed',
+        category: 'PURCHASE',
+        description: `Failed to send gift card email to ${validatedData.customerEmail}`,
+        resourceType: 'purchased_gift_card',
+        resourceId: purchasedCard.id,
+        metadata: { error: (emailError as Error).message },
+        merchantId: giftCard.merchantId,
+        severity: 'ERROR'
+      });
     }
+    
 
     return res.status(201).json({
       success: true,
@@ -210,7 +294,18 @@ export const getGiftCardByQR = async (req: Request, res: Response) => {
         where: { id: purchasedCard.id },
         data: { status: "EXPIRED" },
       });
+
+      await ActivityLogger.log({
+        actorType: 'system',
+        action: 'auto_expired',
+        category: 'PURCHASE',
+        description: `Gift card auto-expired on balance check`,
+        resourceType: 'purchased_gift_card',
+        resourceId: purchasedCard.id,
+        merchantId: purchasedCard.giftCard.merchantId
+      });
     }
+    
 
     // Calculate total redeemed amount
     const totalRedeemed = purchasedCard.redemptions.reduce(
@@ -297,6 +392,15 @@ export const redeemGiftCard = async (req: Request, res: Response) => {
     });
 
     if (!purchasedCard) {
+      ActivityLogger.verificationFailed(
+        validatedData.qrCode,
+        'Invalid QR code',
+        merchantId,
+        undefined,
+        req
+      );
+
+
       return res.status(404).json({
         success: false,
         message: "Invalid QR code",
@@ -305,6 +409,15 @@ export const redeemGiftCard = async (req: Request, res: Response) => {
 
     // Check if the gift card belongs to this merchant
     if (purchasedCard.giftCard.merchantId !== merchantId) {
+
+      ActivityLogger.verificationFailed(
+        validatedData.qrCode,
+        'Gift card belongs to different merchant',
+        merchantId,
+        purchasedCard.giftCard.merchantId,
+        req
+      );
+
       return res.status(403).json({
         success: false,
         message: "This gift card does not belong to your business",
@@ -313,6 +426,14 @@ export const redeemGiftCard = async (req: Request, res: Response) => {
 
     // Check if expired
     if (new Date() > purchasedCard.expiresAt) {
+
+      ActivityLogger.verificationFailed(
+        validatedData.qrCode,
+        'Gift card expired',
+        merchantId,
+        merchantId,
+        req
+      );
       return res.status(400).json({
         success: false,
         message: "This gift card has expired",
@@ -322,6 +443,14 @@ export const redeemGiftCard = async (req: Request, res: Response) => {
 
     // Check status
     if (purchasedCard.status !== "ACTIVE") {
+
+      ActivityLogger.verificationFailed(
+        validatedData.qrCode,
+        `Gift card status: ${purchasedCard.status}`,
+        merchantId,
+        merchantId,
+        req
+      );
       return res.status(400).json({
         success: false,
         message: `Gift card is ${purchasedCard.status.toLowerCase().replace("_", " ")}`,
@@ -332,6 +461,24 @@ export const redeemGiftCard = async (req: Request, res: Response) => {
     // Check if sufficient balance
     const currentBalance = purchasedCard.currentBalance.toNumber();
     if (validatedData.amount > currentBalance) {
+
+      ActivityLogger.log({
+        actorId: merchantId,
+        actorType: 'merchant',
+        action: 'redemption_failed',
+        category: 'REDEMPTION',
+        description: `Redemption failed - insufficient balance. Requested: ₹${validatedData.amount}, Available: ₹${currentBalance}`,
+        resourceType: 'purchased_gift_card',
+        resourceId: purchasedCard.id,
+        metadata: { 
+          requestedAmount: validatedData.amount, 
+          availableBalance: currentBalance,
+          qrCode: validatedData.qrCode.substring(0, 8) + '...'
+        },
+        merchantId,
+        severity: 'WARNING',
+        req
+      });
       return res.status(400).json({
         success: false,
         message: `Insufficient balance. Available: ₹${currentBalance.toFixed(2)}`,
@@ -375,8 +522,37 @@ export const redeemGiftCard = async (req: Request, res: Response) => {
         lastUsedAt: new Date(),
       };
 
+      ActivityLogger.redemptionSuccess(
+      result.redemption.id,
+      purchasedCard.id,
+      validatedData.amount,
+      newBalance,
+      merchantId,
+      merchantId,
+      req
+    );
+
+    await notificationService.onRedemptionMade(
+      result.redemption.id,
+    validatedData.amount,
+      purchasedCard.giftCard.title,
+      purchasedCard.customerName
+    );
+
+    await notificationService.onGiftCardRedeemed(
+      merchantId,
+      result.redemption.id,
+      purchasedCard.giftCard.title,
+      validatedData.amount,
+      purchasedCard.customerName
+    );
+
+
+
+
       // If balance is zero, mark as fully redeemed
       if (newBalance === 0) {
+        
         updateData.status = "FULLY_REDEEMED";
       }
 
@@ -387,6 +563,26 @@ export const redeemGiftCard = async (req: Request, res: Response) => {
 
       return { redemption, updatedCard };
     });
+
+
+
+    // Log if fully redeemed
+    if (newBalance === 0) {
+      ActivityLogger.redemptionFullyRedeemed(
+        purchasedCard.id,
+        purchasedCard.purchaseAmount.toNumber(),
+        merchantId
+      );
+    }
+
+    // Log verification success
+    ActivityLogger.verificationSuccess(
+      purchasedCard.id,
+      validatedData.qrCode.substring(0, 8) + '...',
+      merchantId,
+      merchantId,
+      req
+    );
 
     return res.status(200).json({
       success: true,
