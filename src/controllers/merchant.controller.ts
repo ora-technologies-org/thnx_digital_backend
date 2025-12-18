@@ -965,7 +965,7 @@ export const verifyMerchant = async (req: Request, res: Response) => {
     }
 
     const merchantProfile = await prisma.merchantProfile.findUnique({
-      where: { userId: merchantId },
+      where: { id: merchantId },
       include: {
         user: true,
       },
@@ -986,7 +986,7 @@ export const verifyMerchant = async (req: Request, res: Response) => {
     }
 
     const updatedProfile = await prisma.merchantProfile.update({
-      where: { userId: merchantId },
+      where: { id: merchantId },
       data:
         action === "approve"
           ? {
