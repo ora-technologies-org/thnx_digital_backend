@@ -151,7 +151,6 @@ export const changePasswordSchema = z.object({
 })
 
 export const resetPasswordSchema = z.object({
-  email : z.string().email("Invalid Email Address"),
   password: z.string()
     .min(8, 'Password must be at least 8 characters')
     .regex(/[A-Z]/, 'Password must contain at least one uppercase letter')

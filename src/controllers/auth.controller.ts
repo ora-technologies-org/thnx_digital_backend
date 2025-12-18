@@ -687,6 +687,7 @@ export const changePassword =  async (req: Request, res: Response) => {
 
 export const resetPassword = async (req: Request, res: Response) => {
   try {
+    const id = req.authUser?.userId;
     const parsedData = resetPasswordSchema.safeParse(req.body);
     if (!parsedData.success) {
       const errors = parsedData.error.issues.map((issue) => ({
@@ -700,25 +701,26 @@ export const resetPassword = async (req: Request, res: Response) => {
       });
     }
 
-    const {email, password, newPassword, confirmPassword} = parsedData.data;
-
-    const user = await prisma.user.findUnique({
+    const { password, newPassword, confirmPassword} = parsedData.data;
+    const user = await prisma.user.findFirst({
       where:{
-        email: email
+        id: id
       }
     }); 
+    console.log(user);
     if (!user){
       return res.status(404).json({
         success: false,
-        message: "User not found with given email"
+        message: "User not found with given id"
       });
     }
     if (newPassword !== confirmPassword){
       return res.status(400).json({
         success: false,
-        message: "Passwords do not match"
+        message: "Passwords do not match."
       });
     }
+    console.log(password);
     const checkPassword = await bcrypt.compare(password, user.password!);
     if (!checkPassword){
       return res.status(400).json({
@@ -730,7 +732,7 @@ export const resetPassword = async (req: Request, res: Response) => {
     
     const updateUser = await prisma.user.update({
       where: {
-         email: email
+         id: id
       },data:{
         password: hashPassword,
         isFirstTime: false
@@ -770,7 +772,7 @@ export const resetAdminPassword = async(req: Request, res: Response, next: NextF
         errors,
       });
     }
-    const { email, password, newPassword, confirmPassword } = parsedData.data;
+    const { password, newPassword, confirmPassword } = parsedData.data;
     if (newPassword !== confirmPassword){
       return res.status(400).json({
         success: false,
@@ -810,7 +812,7 @@ export const resetAdminPassword = async(req: Request, res: Response, next: NextF
       });
     }
     try {
-      const sendResetPasswordEmail = await sendPasswordResetSuccessEmail(email);
+      const sendResetPasswordEmail = await sendPasswordResetSuccessEmail(req.authUser?.email!);
     } catch (error) {
       return res.status(500).json({
         success: false,

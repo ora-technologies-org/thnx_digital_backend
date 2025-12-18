@@ -465,7 +465,7 @@ router.post("/reset-password", changePassword);
 
 router.post("/google-login", googleLogin);
 
-router.post("/change-password", resetPassword);
+router.post("/change-password", authenticate, authorize("MERCHANT"), resetPassword);
 router.post("/admin-password",authenticate, authorize("ADMIN"), resetAdminPassword);
 
 export default router;
