@@ -7,14 +7,12 @@ export const EmailService = {
     to: string,
     name: string,
     password: string,
-    businessName: string
   ): void => {
     emailQueue.add('welcome', {
       type: 'welcome_email',
       to,
       name,
       password,
-      businessName,
     }).catch((error) => {
       console.error('Failed to queue welcome email:', error);
     });
