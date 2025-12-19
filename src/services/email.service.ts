@@ -14,7 +14,6 @@ export const EmailService = {
       to,
       name,
       password,
-      businessName,
     }).catch((error) => {
       console.error('Failed to queue welcome email:', error);
     });
