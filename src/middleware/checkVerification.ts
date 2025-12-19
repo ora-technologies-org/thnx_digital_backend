@@ -10,12 +10,11 @@ export const requireVerifiedMerchant = async (req: Request, res: Response, next:
       });
     }
 
-    if (req.user.role !== 'MERCHANT') {
+    if (req.authUser?.role !== 'MERCHANT') {
       return next();
     }
-    
     const merchantProfile = await prisma.merchantProfile.findUnique({
-      where: { userId: req.user.id },
+      where: { userId: req.authUser.userId },
     });
     
     if (!merchantProfile) {
