@@ -620,6 +620,17 @@ export const createSettings = async (req:Request, res: Response) => {
         message: "Merchant not found with the given id."
       });
     }
+    const findSettings = await prisma.settings.findUnique({
+      where:{
+        merchantId: merchant.id
+      }
+    });
+    if (findSettings){
+      return res.status(400).json({
+        success: false,
+        message: "Settings have already been created, please update it."
+      });
+    }
     const settings = await prisma.settings.create({
       data:{
         merchantId: merchant.id,
