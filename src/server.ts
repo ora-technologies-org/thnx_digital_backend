@@ -1,4 +1,8 @@
 
+import { errorHandler } from "./middleware/errorHandler";
+import userRoutes from "../src/routes/user.route"
+import path from "path";
+
 import express, { Request, Response } from 'express';
 import { createServer } from 'http';
 import dotenv from 'dotenv';
@@ -36,6 +40,19 @@ const PORT = process.env.PORT || 3000;
 const io = initializeSocket(httpServer);
 
 const allowedOrigins = [
+  "http://localhost:8080",
+  "http://localhost:3000",
+  "http://localhost:5173",
+  "http://127.0.0.1:8080",
+  "http://127.0.0.1:3000",
+  "http://127.0.0.1:5173",
+  "http://thnxdigital.com",
+  "https://thnxdigital.com",
+  "http://www.thnxdigital.com",
+  "https://www.thnxdigital.com",
+  "https://rncks4z6-8081.inc1.devtunnels.ms",
+  "https://rncks4z6-8080.inc1.devtunnels.ms",
+  "http://localhost:8081",
   'http://localhost:8080',
   'http://localhost:3000',
   'http://localhost:8001',
@@ -93,6 +110,14 @@ app.use(
 );
 
 
+//
+app.use(
+  "/uploads",
+  express.static(path.join(__dirname, "..", "uploads"))
+);
+
+
+// Initialize Passport
 
 configurePassport();
 app.use(passport.initialize());
@@ -219,6 +244,11 @@ app.get('/health', async (req: Request, res: Response) => {
 });
 
 // API Routes
+app.use("/api/auth", authRoutes);
+app.use("/api/merchants", merchantRoutes);
+app.use("/api/gift-cards", giftCardRoutes);
+app.use("/api/purchases", purchaseRoutes);
+app.use("/api/users", userRoutes)
 app.use('/api/auth', authRoutes);
 app.use('/api/merchants', merchantRoutes);
 app.use('/api/gift-cards', giftCardRoutes);
@@ -235,6 +265,9 @@ app.use((req: Request, res: Response) => {
     message: 'Route not found',
   });
 });
+app.use(errorHandler);
+
+
 
 // Error handler
 app.use((err: any, req: Request, res: Response, next: any) => {
