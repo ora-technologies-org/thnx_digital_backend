@@ -79,6 +79,8 @@ model User {
   refreshTokens     RefreshToken[]
   changePassword    ChangePassword[]
 
+  notificationPreference NotificationPreference? 
+
   @@map("users")
 }
 
@@ -246,4 +248,120 @@ model ChangePassword {
   used                Boolean
   createdAt           DateTime @default(now())
   updateAt           DateTime @updatedAt
+}
+enum ActivityCategory {
+  AUTH
+  USER
+  MERCHANT
+  GIFT_CARD
+  PURCHASE
+  REDEMPTION
+  SYSTEM
+}
+
+enum ActivitySeverity {
+  INFO
+  WARNING
+  ERROR
+  CRITICAL
+}
+
+model ActivityLog {
+  id        String   @id @default(uuid())
+  createdAt DateTime @default(now())
+
+  actorId   String?
+  actorType String
+
+  action      String
+  category    ActivityCategory
+  description String
+
+  resourceType String?
+  resourceId   String?
+
+  metadata   Json?
+  severity   ActivitySeverity @default(INFO)
+
+  merchantId String?
+  ipAddress  String?
+  userAgent  String?
+
+  @@index([createdAt(sort: Desc)])
+  @@index([category])
+  @@index([actorId])
+  @@index([merchantId])
+  @@index([resourceType, resourceId])
+  @@index([severity])
+  @@map("activity_logs")
+}
+
+
+
+enum NotificationType {
+  // Admin notifications
+  MERCHANT_REGISTERED
+  PROFILE_SUBMITTED_FOR_VERIFICATION
+  PURCHASE_MADE
+  REDEMPTION_MADE
+
+  // Merchant notifications
+  PROFILE_VERIFIED
+  PROFILE_REJECTED
+  GIFT_CARD_PURCHASED
+  GIFT_CARD_REDEEMED
+}
+
+enum RecipientType {
+  ADMIN
+  MERCHANT
+}
+
+
+model Notification {
+  id        String   @id @default(uuid())
+  createdAt DateTime @default(now())
+
+  recipientId   String
+  recipientType RecipientType
+
+  type    NotificationType
+  title   String
+  message String
+
+  resourceType String?
+  resourceId   String?
+
+  isRead Boolean   @default(false)
+  readAt DateTime?
+
+  actorId   String?
+  actorName String?
+
+  @@index([recipientId, recipientType])
+  @@index([recipientId, isRead])
+  @@index([createdAt(sort: Desc)])
+  @@index([type])
+  @@map("notifications")
+}
+
+model NotificationPreference {
+  id     String @id @default(uuid())
+  userId String @unique
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  merchantRegistered              Boolean @default(true)
+  profileSubmittedForVerification Boolean @default(true)
+  purchaseMade                    Boolean @default(true)
+  redemptionMade                  Boolean @default(true)
+
+  profileVerified   Boolean @default(true)
+  profileRejected   Boolean @default(true)
+  giftCardPurchased Boolean @default(true)
+  giftCardRedeemed  Boolean @default(true)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@map("notification_preferences")
 }
