@@ -36,6 +36,7 @@ export const uploadMerchantDocs = multer({
   limits: { fileSize: 5 * 1024 * 1024 }, // 5MB limit
   fileFilter,
 }).fields([
+  { name: 'businessLogo', maxCount: 1 },
   { name: 'registrationDocument', maxCount: 1 },
   { name: 'taxDocument', maxCount: 1 },
   { name: 'identityDocument', maxCount: 1 },
