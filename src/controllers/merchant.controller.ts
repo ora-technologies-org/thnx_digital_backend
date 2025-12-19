@@ -46,14 +46,14 @@ export const merchantRegister = async (req: Request, res: Response) => {
         },
       });
 
-      await tx.merchantProfile.create({
-        data: {
-          userId: newUser.id,
-          businessName: validatedData.businessName,
-          profileStatus: "INCOMPLETE",
-          isVerified: false,
-        },
-      });
+      // await tx.merchantProfile.create({
+      //   data: {
+      //     userId: newUser.id,
+      //     businessName: validatedData.businessName,
+      //     profileStatus: "INCOMPLETE",
+      //     isVerified: false,
+      //   },
+      // });
 
       return newUser;
     });
@@ -62,7 +62,7 @@ export const merchantRegister = async (req: Request, res: Response) => {
 
       await notificationService.onMerchantRegistered(
       user.id,
-      user.name || validatedData.businessName
+      user.name || validatedData.name
     );
 
 
@@ -71,7 +71,6 @@ export const merchantRegister = async (req: Request, res: Response) => {
       user.email,
       user.name || "Merchant",
       validatedData.password, // Send original password (before hashing)
-      validatedData.businessName,
     );
 
     const tokens = generateTokens({
@@ -110,7 +109,7 @@ export const merchantRegister = async (req: Request, res: Response) => {
     });
   } catch (error: any) {
     console.error("Merchant registration error:", error);
-
+    
     if (error.name === "ZodError") {
       return res.status(400).json({
         success: false,
@@ -152,22 +151,16 @@ export const completeProfile = async (req: Request, res: Response) => {
       });
     }
 
-    const existingProfile = await prisma.merchantProfile.findUnique({
-      where: { userId },
-    });
-
-    if (!existingProfile) {
-      return res.status(404).json({
-        success: false,
-        message: "Merchant profile not found",
-      });
-    }
-
-    if (existingProfile.profileStatus === "VERIFIED") {
+    const merchant = await prisma.merchantProfile.findUnique({
+      where:{
+        userId: userId
+      }
+    }); 
+    if (merchant?.profileStatus === "VERIFIED"){
       return res.status(400).json({
         success: false,
-        message: "Profile is already verified. Contact admin for changes.",
-      });
+        message: "Profile already verified."
+      })
     }
 
     const validatedData = completeProfileSchema.parse(req.body);
@@ -186,9 +179,9 @@ export const completeProfile = async (req: Request, res: Response) => {
       additionalDocuments: files?.additionalDocuments?.map((f) => f.path) || [],
     };
 
-    const updatedProfile = await prisma.merchantProfile.update({
-      where: { userId },
+    const updatedProfile = await prisma.merchantProfile.create({
       data: {
+        businessName: validatedData.businessName!,
         businessRegistrationNumber: validatedData.businessRegistrationNumber,
         taxId: validatedData.taxId,
         businessType: validatedData.businessType,
@@ -212,6 +205,7 @@ export const completeProfile = async (req: Request, res: Response) => {
         identityDocument: documentData.identityDocument,
         additionalDocuments: documentData.additionalDocuments,
         profileStatus: "PENDING_VERIFICATION",
+        userId: userId
       },
       include: {
         user: {
@@ -563,7 +557,6 @@ export const resubmitProfile = async (req: Request, res: Response) => {
 export const updateMerchantProfile = async (req: Request, res: Response) => {
   try {
     const userId = req.authUser?.userId;
-
     if (!userId) {
       return res.status(401).json({
         success: false,
@@ -641,6 +634,7 @@ export const adminCreateMerchant = async (req: Request, res: Response) => {
     const authReq = req as AuthenticatedRequest;
     const validatedData = adminCreateMerchantSchema.parse(req.body);
     const adminId = authReq.authUser?.userId;
+    const files = req.files as { [fieldname: string]: Express.Multer.File[] };
 
     const existingUser = await prisma.user.findUnique({
       where: { email: validatedData.email },
@@ -652,6 +646,26 @@ export const adminCreateMerchant = async (req: Request, res: Response) => {
         message: "User with this email already exists",
       });
     }
+
+    const existsRegistrationNumber = await prisma.merchantProfile.findFirst({
+      where: {
+        businessRegistrationNumber: validatedData.businessRegistrationNumber
+      }
+    })
+
+    if (existsRegistrationNumber){
+      return res.status(400).json({
+        success: false,
+        message: "Provided business registration number is already in use"
+      })
+    }
+
+    const documentData = {
+        registrationDocument: files?.registrationDocument?.[0]?.path || null,
+        taxDocument: files?.taxDocument?.[0]?.path || null,
+        identityDocument: files?.identityDocument?.[0]?.path,
+        additionalDocuments: files?.additionalDocuments?.map((f) => f.path) || [],
+    };
 
     const hashedPassword = await bcrypt.hash(validatedData.password, 10);
 
@@ -666,6 +680,7 @@ export const adminCreateMerchant = async (req: Request, res: Response) => {
           emailVerified: true,
           isActive: true,
           createdById: adminId,
+          isFirstTime: true
         },
       });
 
@@ -690,6 +705,15 @@ export const adminCreateMerchant = async (req: Request, res: Response) => {
           isVerified: true,
           verifiedAt: new Date(),
           verifiedById: adminId,
+          bankName: validatedData.bankName,
+          accountNumber: validatedData.accountNumber,
+          accountHolderName: validatedData.accountHolderName,
+          ifscCode: validatedData.ifscCode,
+          swiftCode: validatedData.swiftCode,
+          taxDocument: documentData.taxDocument,
+          identityDocument: documentData.identityDocument,
+          additionalDocuments: documentData.additionalDocuments,
+          registrationDocument: documentData.registrationDocument,
         },
       });
 
@@ -724,7 +748,6 @@ export const adminCreateMerchant = async (req: Request, res: Response) => {
       result.user.email,
       result.user.name || "Merchant",
       validatedData.password,
-      validatedData.businessName,
     );
 
     return res.status(201).json({
@@ -1066,3 +1089,107 @@ export const deleteMerchant = async (req: Request, res: Response) => {
     });
   }
 };
+
+export const updateMerchantData = async (req: Request, res: Response) => {
+  try {
+    const id = req.authUser?.userId;
+    
+
+    const files = req.files as {
+      registrationDocument?: Express.Multer.File[];
+      taxDocument?: Express.Multer.File[];
+      identityDocument?: Express.Multer.File[];
+      additionalDocuments?: Express.Multer.File[];
+    };
+
+
+    const updateData: Record<string, any> = {};
+    const allowedFileds = ["businessName", "businessRegistrationNumber", "taxId", "businessType", "businessCategory", "address", "city", "state", "zipCode", "country", "businessPhone", "businessEmail", "website", "bankName", "accountNumber", "accountHolderName", "ifscCode", "swiftCode", "description", "registrationDocument", "taxDocument", "identityDocument", "additionalDocuments"];
+    
+    const sentFields = Object.keys(req.body);
+    const invalidFields = sentFields.filter((field) => !allowedFileds.includes(field));
+    
+    if (invalidFields.length > 0){
+      return res.status(400).json({
+        success: false,
+        message: `You cannot update the following fields: ${invalidFields.join(" ,")}`
+      })
+    }
+
+    for (const field of allowedFileds){
+      if (req.body[field] !== undefined){
+        updateData[field] = req.body[field]
+      }
+    }
+
+    // const existsRegistrationNumber = await prisma.merchantProfile.findFirst({
+    //   where: {
+    //     businessRegistrationNumber: req.body.businessRegistrationNumber
+    //   }
+    // })
+
+    // if (existsRegistrationNumber){
+    //   return res.status(400).json({
+    //     success: false,
+    //     message: "Provided business registration number is already in use"
+    //   })
+    // }
+
+    const merchant = await prisma.merchantProfile.findFirst({
+      where:{
+        userId: id
+      }
+    });
+    if (merchant?.profileStatus === "VERIFIED"){
+      return res.status(400).json({
+        success: false,
+        message: "Profile verified. Therefore, couldn't be updated."
+      });
+    };
+    if (files?.registrationDocument?.[0]) {
+      updateData.registrationDocument =
+        files.registrationDocument[0].path;
+    }
+
+    if (files?.taxDocument?.[0]) {
+      updateData.taxDocument = files.taxDocument[0].path;
+    }
+
+    if (files?.identityDocument?.[0]) {
+      updateData.identityDocument = files.identityDocument[0].path;
+    }
+
+    if (files?.additionalDocuments?.length) {
+      updateData.additionalDocuments = files.additionalDocuments.map(
+        (f) => f.path
+      );
+    }
+
+    updateData.profileStatus = "PENDING_VERIFICATION";
+
+    const updateMerchant = await prisma.merchantProfile.update({
+      where:{
+        userId: id
+      },
+      data: updateData
+    })
+    if (!updateMerchant){
+      return res.status(400).json({
+        success: true,
+        message: "Your profile couldn't be updated"
+      });
+    }
+    return res.status(200).json({
+      success :true,
+      message: "Profile updated successfully.",
+      data: updateMerchant
+    })
+
+  } catch (error: any) {
+    return res.status(500).json({
+      success: false,
+      message: "Error updating merchant data.",
+      error: error.message
+    })
+  }
+}

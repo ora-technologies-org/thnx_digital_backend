@@ -8,6 +8,7 @@ import {
   getPendingMerchants,
   verifyMerchant,
   deleteMerchant,
+  updateMerchantData,
 } from "../controllers/merchant.controller";
 import {
   authenticate,
@@ -305,7 +306,7 @@ router.post(
  *       500:
  *         $ref: '#/components/responses/InternalServerError'
  */
-router.post("/", authenticate, authorize("ADMIN"), adminCreateMerchant);
+router.post("/", authenticate, authorize("ADMIN"), uploadMerchantDocs, adminCreateMerchant);
 
 /**
  * @swagger
@@ -509,5 +510,7 @@ router.delete(
   authorize("ADMIN"),
   deleteMerchant
 );
+
+router.put("/", authenticate, authorize("MERCHANT"), uploadMerchantDocs, updateMerchantData)
 
 export default router;
