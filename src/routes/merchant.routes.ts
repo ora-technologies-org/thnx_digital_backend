@@ -8,6 +8,14 @@ import {
   getPendingMerchants,
   verifyMerchant,
   deleteMerchant,
+  updateMerchantData,
+  adminUpdateMerchant,
+  getMerchantById,
+  getGiftCardByMerchant,
+  getVerifiedMerchants,
+  getOverallAnalytics,
+  generateAnalyticsPDF,
+  createSupportTicket,
 } from "../controllers/merchant.controller";
 import {
   authenticate,
@@ -15,6 +23,7 @@ import {
   requireCompleteProfile,
 } from "../middleware/auth.middleware";
 import { uploadMerchantDocs } from "../utils/multer";
+import { auth } from "google-auth-library";
 
 const router = express.Router();
 
@@ -305,7 +314,7 @@ router.post(
  *       500:
  *         $ref: '#/components/responses/InternalServerError'
  */
-router.post("/", authenticate, authorize("ADMIN"), adminCreateMerchant);
+router.post("/", authenticate, authorize("ADMIN"), uploadMerchantDocs, adminCreateMerchant);
 
 /**
  * @swagger
@@ -509,5 +518,18 @@ router.delete(
   authorize("ADMIN"),
   deleteMerchant
 );
+
+router.put("/", authenticate, authorize("MERCHANT"), uploadMerchantDocs, updateMerchantData);
+router.put("/:merchantId", authenticate, authorize("ADMIN"), uploadMerchantDocs, adminUpdateMerchant);
+
+
+router.get("/:merchantId", authenticate, authorize("ADMIN"), getMerchantById);
+
+router.get("/cards/:merchantId", authenticate, authorize("ADMIN"), getGiftCardByMerchant);
+router.get("/all/verified", authenticate, authorize("ADMIN"), getVerifiedMerchants);
+router.get("/analytics/business", authenticate, authorize("ADMIN"), getOverallAnalytics);
+router.get("/analytics/report", authenticate, authorize("ADMIN"), generateAnalyticsPDF);
+
+router.post("/support-ticket", authenticate, authorize("MERCHANT"), createSupportTicket);
 
 export default router;
