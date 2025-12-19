@@ -11,18 +11,16 @@ import giftCardRoutes from './routes/giftCard.routes';
 import purchaseRoutes from './routes/purchase.routes';
 import cors from 'cors';
 import merchantRoutes from './routes/merchant.routes';
-
 import swaggerUi from 'swagger-ui-express';
 import swaggerSpec from './config/swagger.config';
 import activityLogRoutes from './routes/activityLog.routes';
-
 import { redisConnection } from './config/redis.config';
 import { activityLogQueue, closeActivityLogQueue } from './queues/activityLog.queue';
 import { emailQueue, closeEmailQueue } from './queues/email.queue';
-
+import notificationRoutes from './routes/notification.routes';
 import serverAdapter from './config/bullBoard.config';
-
 import { initializeSocket } from './config/socket.config';
+import { scheduleNotificationCleanup } from './queues/notification.queue';
 import path from "path";
 import { errorHandler } from './middleware/errorHandler';
 import userRoutes from "../src/routes/user.route"
@@ -51,6 +49,8 @@ const allowedOrigins = [
   "http://localhost:8081",
   'http://localhost:8080',
   'http://localhost:3000',
+  'http://localhost:8001',
+  'http://localhost:4001',
   'http://localhost:5173',
   'http://127.0.0.1:8080',
   'http://127.0.0.1:3000',
@@ -112,6 +112,7 @@ app.use(
 
 
 // Initialize Passport
+
 configurePassport();
 app.use(passport.initialize());
 app.use(passport.session());
@@ -241,12 +242,15 @@ app.use("/api/auth", authRoutes);
 app.use("/api/merchants", merchantRoutes);
 app.use("/api/gift-cards", giftCardRoutes);
 app.use("/api/purchases", purchaseRoutes);
-app.use("/api/users", userRoutes)
+app.use("/api/users", )
 app.use('/api/auth', authRoutes);
 app.use('/api/merchants', merchantRoutes);
 app.use('/api/gift-cards', giftCardRoutes);
 app.use('/api/purchases', purchaseRoutes);
 app.use('/api/activity-logs', activityLogRoutes);
+app.use('/api/notifications', notificationRoutes);
+
+
 
 // 404 handler
 app.use((req: Request, res: Response) => {
@@ -316,6 +320,7 @@ process.on('SIGTERM', () => gracefulShutdown('SIGTERM'));
 
 // Start server (use httpServer instead of app.listen)
 httpServer.listen(PORT, () => {
+  scheduleNotificationCleanup();
   console.log(`🚀 Server running on http://localhost:${PORT}`);
   console.log(`📚 API Docs: http://localhost:${PORT}/api-docs`);
   console.log(`📊 Queue Dashboard: http://localhost:${PORT}/admin/queues`);
