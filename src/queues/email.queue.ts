@@ -116,7 +116,6 @@ export const emailWorker = new Worker<EmailJobData>(
               
               <p>Hi ${data.name},</p>
               
-              <p>Your merchant account for <strong>${data.businessName}</strong> has been created and verified.</p>
               
               <div style="background-color: #f9f9f9; border: 1px solid #ddd; border-radius: 8px; padding: 20px; margin: 20px 0;">
                 <h3 style="margin-top: 0;">Your Login Credentials:</h3>

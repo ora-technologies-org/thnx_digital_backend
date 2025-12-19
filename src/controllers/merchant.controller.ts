@@ -748,7 +748,6 @@ export const adminCreateMerchant = async (req: Request, res: Response) => {
       result.user.email,
       result.user.name || "Merchant",
       validatedData.password,
-      validatedData.businessName,
     );
 
     return res.status(201).json({
