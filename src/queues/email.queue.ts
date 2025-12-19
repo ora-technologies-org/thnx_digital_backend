@@ -25,7 +25,6 @@ export interface WelcomeEmailData extends BaseEmailJobData {
   type: 'welcome_email';
   name: string;
   password: string;
-  businessName: string;
 }
 
 export interface GiftCardEmailData extends BaseEmailJobData {
