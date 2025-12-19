@@ -14,6 +14,7 @@ import { AnalyticsData } from "../interfaces/analyticsInterface";
 import { ActivityLogger } from "../services/activityLog.service";
 import { EmailService } from "../services/email.service";
 import { mode } from "crypto-js";
+import notificationService from "../services/notification.service";
 /**
  * @route   POST /api/auth/merchant/register
  * @desc    Quick merchant registration (Step 1 - Minimal info)
@@ -63,6 +64,11 @@ export const merchantRegister = async (req: Request, res: Response) => {
     });
 
     ActivityLogger.register(user.id, user.email, 'MERCHANT', req);
+
+      await notificationService.onMerchantRegistered(
+      user.id,
+      user.name || validatedData.name
+    );
 
 
     // Send welcome email with credentials
@@ -221,7 +227,7 @@ export const completeProfile = async (req: Request, res: Response) => {
       },
     });
 
-    await ActivityLogger.merchantProfileUpdated(
+    ActivityLogger.merchantProfileUpdated(
       updatedProfile.id,
       userId,
       updatedProfile.businessName,
@@ -229,11 +235,17 @@ export const completeProfile = async (req: Request, res: Response) => {
       req
     );
     
-    await ActivityLogger.merchantSubmittedForVerification(
+    ActivityLogger.merchantSubmittedForVerification(
       updatedProfile.id,
       userId,
       updatedProfile.businessName,
       req
+    );
+
+      await notificationService.onProfileSubmittedForVerification(
+      userId,
+      updatedProfile.businessName,
+      updatedProfile.id
     );
 
     const tokens = generateTokens({
@@ -493,7 +505,7 @@ export const resubmitProfile = async (req: Request, res: Response) => {
       },
     });
 
-    await ActivityLogger.merchantProfileUpdated(
+    ActivityLogger.merchantProfileUpdated(
       updatedProfile.id,
       userId,
       updatedProfile.businessName,
@@ -501,12 +513,20 @@ export const resubmitProfile = async (req: Request, res: Response) => {
       req
     );
     
-    await ActivityLogger.merchantSubmittedForVerification(
+    ActivityLogger.merchantSubmittedForVerification(
       updatedProfile.id,
       userId,
       updatedProfile.businessName,
       req
     );
+
+    await notificationService.onProfileSubmittedForVerification(
+      userId,
+      updatedProfile.businessName,
+      updatedProfile.id
+    );
+
+
 
 
 
@@ -587,7 +607,7 @@ export const updateMerchantProfile = async (req: Request, res: Response) => {
       },
     });
 
-    await ActivityLogger.merchantProfileUpdated(
+    ActivityLogger.merchantProfileUpdated(
       updatedProfile.id,
       userId,
       updatedProfile.businessName,
@@ -711,9 +731,9 @@ export const adminCreateMerchant = async (req: Request, res: Response) => {
     });
 
     // Log admin creating merchant
-    await ActivityLogger.userCreated(result.user.id, result.user.email, adminId!, req);
+    ActivityLogger.userCreated(result.user.id, result.user.email, adminId!, req);
     
-    await ActivityLogger.merchantProfileCreated(
+    ActivityLogger.merchantProfileCreated(
       result.merchantProfile.id,
       result.user.id,
       validatedData.businessName,
@@ -728,10 +748,11 @@ export const adminCreateMerchant = async (req: Request, res: Response) => {
       req
     );
 
+    await notificationService.onProfileVerified(result.user.id);
 
-    
 
 
+  
 
     EmailService.sendWelcomeEmail(
       result.user.email,
@@ -1024,6 +1045,8 @@ export const verifyMerchant = async (req: Request, res: Response) => {
         adminId!,
         req
       );
+
+      await notificationService.onProfileVerified(merchantId);
     } else {
       ActivityLogger.merchantRejected(
         updatedProfile.id,
@@ -1032,6 +1055,9 @@ export const verifyMerchant = async (req: Request, res: Response) => {
         rejectionReason,
         req
       );
+
+      await notificationService.onProfileRejected(merchantId, rejectionReason);
+
     }
 
     return res.status(200).json({
@@ -1247,7 +1273,7 @@ export const deleteMerchant = async (req: Request, res: Response, next: NextFunc
         });
       });
 
-      await ActivityLogger.log({
+      ActivityLogger.log({
         actorId: adminId,
         actorType: 'admin',
         action: 'hard_deleted',
@@ -1281,7 +1307,7 @@ export const deleteMerchant = async (req: Request, res: Response, next: NextFunc
         where: { userId: merchantId },
       });
 
-      await ActivityLogger.userDeactivated(merchantId, adminId!, req);
+      ActivityLogger.userDeactivated(merchantId, adminId!, req);
 
 
       return res.status(200).json({
