@@ -12,7 +12,7 @@ export const EmailService = {
       type: 'welcome_email',
       to,
       name,
-      password,
+      password
     }).catch((error: any) => {
       console.error('Failed to queue welcome email:', error);
     });
@@ -40,7 +40,7 @@ export const EmailService = {
         },
       },
       qrCodeImage,
-    }).catch((error: any) => {
+    }).catch((error) => {
       console.error('Failed to queue gift card email:', error);
     });
   },
@@ -55,7 +55,7 @@ export const EmailService = {
       to,
       name,
       resetLink,
-    }).catch((error: any) => {
+    }).catch((error) => {
       console.error('Failed to queue password reset email:', error);
     });
   },
@@ -70,7 +70,7 @@ export const EmailService = {
       to,
       name,
       businessName,
-    }).catch((error: any) => {
+    }).catch((error) => {
       console.error('Failed to queue merchant approved email:', error);
     });
   },
@@ -88,7 +88,7 @@ export const EmailService = {
       name,
       businessName,
       rejectionReason,
-    }).catch((error: any) => {
+    }).catch((error) => {
       console.error('Failed to queue merchant rejected email:', error);
     });
   },
@@ -104,7 +104,7 @@ export const EmailService = {
       to,
       subject,
       html,
-    }).catch((error: any) => {
+    }).catch((error) => {
       console.error('Failed to queue generic email:', error);
     });
   },
