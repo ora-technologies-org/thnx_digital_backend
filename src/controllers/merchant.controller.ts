@@ -46,14 +46,14 @@ export const merchantRegister = async (req: Request, res: Response) => {
         },
       });
 
-      await tx.merchantProfile.create({
-        data: {
-          userId: newUser.id,
-          businessName: validatedData.businessName,
-          profileStatus: "INCOMPLETE",
-          isVerified: false,
-        },
-      });
+      // await tx.merchantProfile.create({
+      //   data: {
+      //     userId: newUser.id,
+      //     businessName: validatedData.businessName,
+      //     profileStatus: "INCOMPLETE",
+      //     isVerified: false,
+      //   },
+      // });
 
       return newUser;
     });
@@ -62,7 +62,7 @@ export const merchantRegister = async (req: Request, res: Response) => {
 
       await notificationService.onMerchantRegistered(
       user.id,
-      user.name || validatedData.businessName
+      user.name || validatedData.name
     );
 
 
@@ -71,7 +71,6 @@ export const merchantRegister = async (req: Request, res: Response) => {
       user.email,
       user.name || "Merchant",
       validatedData.password, // Send original password (before hashing)
-      validatedData.businessName,
     );
 
     const tokens = generateTokens({
@@ -110,7 +109,7 @@ export const merchantRegister = async (req: Request, res: Response) => {
     });
   } catch (error: any) {
     console.error("Merchant registration error:", error);
-
+    
     if (error.name === "ZodError") {
       return res.status(400).json({
         success: false,
@@ -152,22 +151,16 @@ export const completeProfile = async (req: Request, res: Response) => {
       });
     }
 
-    const existingProfile = await prisma.merchantProfile.findUnique({
-      where: { userId },
-    });
-
-    if (!existingProfile) {
-      return res.status(404).json({
-        success: false,
-        message: "Merchant profile not found",
-      });
-    }
-
-    if (existingProfile.profileStatus === "VERIFIED") {
+    const merchant = await prisma.merchantProfile.findUnique({
+      where:{
+        userId: userId
+      }
+    }); 
+    if (merchant?.profileStatus === "VERIFIED"){
       return res.status(400).json({
         success: false,
-        message: "Profile is already verified. Contact admin for changes.",
-      });
+        message: "Profile already verified."
+      })
     }
 
     const validatedData = completeProfileSchema.parse(req.body);
@@ -186,9 +179,9 @@ export const completeProfile = async (req: Request, res: Response) => {
       additionalDocuments: files?.additionalDocuments?.map((f) => f.path) || [],
     };
 
-    const updatedProfile = await prisma.merchantProfile.update({
-      where: { userId },
+    const updatedProfile = await prisma.merchantProfile.create({
       data: {
+        businessName: validatedData.businessName!,
         businessRegistrationNumber: validatedData.businessRegistrationNumber,
         taxId: validatedData.taxId,
         businessType: validatedData.businessType,
@@ -212,6 +205,7 @@ export const completeProfile = async (req: Request, res: Response) => {
         identityDocument: documentData.identityDocument,
         additionalDocuments: documentData.additionalDocuments,
         profileStatus: "PENDING_VERIFICATION",
+        userId: userId
       },
       include: {
         user: {
@@ -641,6 +635,7 @@ export const adminCreateMerchant = async (req: Request, res: Response) => {
     const authReq = req as AuthenticatedRequest;
     const validatedData = adminCreateMerchantSchema.parse(req.body);
     const adminId = authReq.authUser?.userId;
+    const files = req.files as { [fieldname: string]: Express.Multer.File[] };
 
     const existingUser = await prisma.user.findUnique({
       where: { email: validatedData.email },
@@ -652,6 +647,14 @@ export const adminCreateMerchant = async (req: Request, res: Response) => {
         message: "User with this email already exists",
       });
     }
+
+
+    const documentData = {
+        registrationDocument: files?.registrationDocument?.[0]?.path || null,
+        taxDocument: files?.taxDocument?.[0]?.path || null,
+        identityDocument: files?.identityDocument?.[0]?.path,
+        additionalDocuments: files?.additionalDocuments?.map((f) => f.path) || [],
+    };
 
     const hashedPassword = await bcrypt.hash(validatedData.password, 10);
 
@@ -666,6 +669,7 @@ export const adminCreateMerchant = async (req: Request, res: Response) => {
           emailVerified: true,
           isActive: true,
           createdById: adminId,
+          isFirstTime: true
         },
       });
 
@@ -690,6 +694,15 @@ export const adminCreateMerchant = async (req: Request, res: Response) => {
           isVerified: true,
           verifiedAt: new Date(),
           verifiedById: adminId,
+          bankName: validatedData.bankName,
+          accountNumber: validatedData.accountNumber,
+          accountHolderName: validatedData.accountHolderName,
+          ifscCode: validatedData.ifscCode,
+          swiftCode: validatedData.swiftCode,
+          taxDocument: documentData.taxDocument,
+          identityDocument: documentData.identityDocument,
+          additionalDocuments: documentData.additionalDocuments,
+          registrationDocument: documentData.registrationDocument,
         },
       });
 

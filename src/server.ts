@@ -36,6 +36,19 @@ const PORT = process.env.PORT || 3000;
 const io = initializeSocket(httpServer);
 
 const allowedOrigins = [
+  "http://localhost:8080",
+  "http://localhost:3000",
+  "http://localhost:5173",
+  "http://127.0.0.1:8080",
+  "http://127.0.0.1:3000",
+  "http://127.0.0.1:5173",
+  "http://thnxdigital.com",
+  "https://thnxdigital.com",
+  "http://www.thnxdigital.com",
+  "https://www.thnxdigital.com",
+  "https://rncks4z6-8081.inc1.devtunnels.ms",
+  "https://rncks4z6-8080.inc1.devtunnels.ms",
+  "http://localhost:8081",
   'http://localhost:8080',
   'http://localhost:3000',
   'http://localhost:8001',
