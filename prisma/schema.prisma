@@ -66,6 +66,8 @@ model User {
   resetToken       String?
   resetTokenExpiry DateTime?
 
+  //first time logging in
+  isFirstTime Boolean?
   // Relations
   merchantProfile   MerchantProfile?
   createdById       String?
@@ -75,6 +77,7 @@ model User {
   redemptions       Redemption[]
   verifiedMerchants MerchantProfile[] @relation("MerchantVerifier")
   refreshTokens     RefreshToken[]
+  changePassword    ChangePassword[]
 
   notificationPreference NotificationPreference? 
 
@@ -84,7 +87,7 @@ model User {
 model RefreshToken {
   id        String   @id @default(uuid())
   token     String   @unique
-  userId    String
+  userId    String   
   user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
   expiresAt DateTime
   createdAt DateTime @default(now())
@@ -146,6 +149,9 @@ model MerchantProfile {
   // Additional Info
   description String?
   logo        String?
+
+  //giftCard limit
+  giftCardLimit Int @default(10)
 
   // Timestamps
   createdAt DateTime @default(now())
@@ -226,6 +232,22 @@ model Redemption {
   @@index([purchasedGiftCardId])
   @@index([redeemedById])
   @@map("redemptions")
+}
+
+
+model ChangePassword { 
+  id                  String     @id @default(uuid())
+  userId              String
+
+  //users table reference
+  user      User @relation( fields: [userId], references: [id] )
+
+  //otp
+  otpToken            String
+  otpExpiry           DateTime
+  used                Boolean
+  createdAt           DateTime @default(now())
+  updateAt            DateTime @updatedAt
 }
 enum ActivityCategory {
   AUTH
