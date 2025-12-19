@@ -66,6 +66,8 @@ model User {
   resetToken       String?
   resetTokenExpiry DateTime?
 
+  //first time logging in
+  isFirstTime Boolean?
   // Relations
   merchantProfile   MerchantProfile?
   createdById       String?
@@ -75,6 +77,7 @@ model User {
   redemptions       Redemption[]
   verifiedMerchants MerchantProfile[] @relation("MerchantVerifier")
   refreshTokens     RefreshToken[]
+  changePassword    ChangePassword[]
 
   notificationPreference NotificationPreference? 
 
@@ -84,7 +87,7 @@ model User {
 model RefreshToken {
   id        String   @id @default(uuid())
   token     String   @unique
-  userId    String
+  userId    String   
   user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
   expiresAt DateTime
   createdAt DateTime @default(now())
@@ -99,6 +102,7 @@ model MerchantProfile {
 
   // Business Information
   businessName               String
+  businessLogo               String?
   businessRegistrationNumber String? @unique
   taxId                      String?
   businessType               String?
@@ -147,11 +151,25 @@ model MerchantProfile {
   description String?
   logo        String?
 
+  //giftCard limit
+  giftCardLimit Int @default(10)
+
+  //reference
+  supportTicket SupportTicket[]
+  settings      Settings[]
+
+
   // Timestamps
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
   @@map("merchant_profiles")
+}
+
+enum GiftCardStatus{
+  ACTIVE
+  EXPIRED
+  DEACTIVATED
 }
 
 model GiftCard {
@@ -166,6 +184,14 @@ model GiftCard {
   isActive    Boolean  @default(true)
 
   purchases PurchasedGiftCard[]
+
+  //design
+  primaryColor String?
+  secondaryColor String?
+  merchantLogo String?
+
+  //status 
+  status GiftCardStatus @default(ACTIVE)
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -227,6 +253,81 @@ model Redemption {
   @@index([redeemedById])
   @@map("redemptions")
 }
+
+
+model ChangePassword { 
+  id                  String     @id @default(uuid())
+  userId              String
+
+  //users table reference
+  user      User @relation( fields: [userId], references: [id] )
+
+  //otp
+  otpToken            String
+  otpExpiry           DateTime
+  used                Boolean
+  createdAt           DateTime @default(now())
+  updateAt           DateTime @updatedAt
+}
+
+enum Status{
+  OPEN
+  CLOSE
+  IN_PROGRESS
+}
+model SupportTicket{
+  id                 String @id @default(uuid())
+  merchantId         String
+
+  //merchantProfile table reference
+  merchant MerchantProfile @relation( fields: [merchantId], references: [id])
+  title              String?
+  merchantQuery      String?
+  adminResponse      String?
+
+  status             Status @default(OPEN)
+  createadAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+
+model ContactUs{
+  id                String @id @default(uuid())
+
+  //user information
+  name              String 
+  email             String
+  phone             String
+  //user's message
+  message           String
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+}
+
+model Settings{
+  id                String @id @default(uuid())
+
+  //merchant
+  merchantId        String @unique
+  merchant          MerchantProfile @relation(fields: [merchantId], references: [id])
+
+  //design
+  primaryColor      String   @default("#000000")
+  secondaryColor    String   @default("#FFFFFF")
+  gradientDirection GrandietDirection @default(LEFT_RIGHT)
+  fontFamily        String?
+
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+}
+
+enum GrandietDirection{
+  LEFT_RIGHT
+  TOP_BOTTOM
+  TOP_RIGHT
+  BOTTOM_LEFT
+}
+
 enum ActivityCategory {
   AUTH
   USER
