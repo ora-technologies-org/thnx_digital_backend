@@ -1,12 +1,15 @@
 import { Request, Response } from "express";
 import bcrypt from "bcrypt";
 import { PrismaClient } from "@prisma/client";
-import { loginSchema } from "../validators/auth.validator";
+import { changePasswordSchema, loginSchema } from "../validators/auth.validator";
 import { generateTokens, verifyRefreshToken } from "../utils/jwt.util";
+import { sendForgotPasswordOTP } from "../utils/email.util";
+import { otpGenerator } from "../helpers/otp/otpGenerator";
+import { ClientAuthentication, OAuth2Client } from "google-auth-library";
 import { ActivityLogger } from "../services/activityLog.service";
 
 const prisma = new PrismaClient();
-
+const googleVerification = new OAuth2Client(process.env.GOOGLE_CLIENT_ID);
 // Authenticated Request interface
 export interface AuthenticatedRequest extends Request {
   authUser?: {
@@ -141,6 +144,116 @@ export const login = async (req: Request, res: Response) => {
     });
   }
 };
+
+
+export const googleLogin = async (req: Request, res: Response) => {
+  try {
+    const { credential } = req.body;
+
+    if (!credential) {
+      return res.status(400).json({
+        success: false,
+        message: "Google credential is required",
+      });
+    }
+
+    const ticket = await googleVerification.verifyIdToken({
+      idToken: credential,
+      audience: process.env.GOOGLE_CLIENT_ID,
+    });
+
+    const payload = ticket.getPayload();
+
+    if (!payload || !payload.email) {
+      return res.status(400).json({
+        success: false,
+        message: "Invalid Google token",
+      });
+    }
+
+    const { email, name, picture, sub: googleId } = payload;
+
+    let user = await prisma.user.findUnique({
+      where: { email },
+      include: { merchantProfile: true },
+    });
+
+    const expiresAt = new Date();
+    expiresAt.setDate(expiresAt.getDate() + 7);
+
+    if (!user) {
+      user = await prisma.user.create({
+        data: {
+          email,
+          name: name ?? "Google User",
+          googleId,
+          provider: "google",
+          role: "MERCHANT",
+          emailVerified: true,
+          lastLogin: new Date(),
+        },
+        include:{
+          merchantProfile: true
+        }
+      });
+    } else {
+      user = await prisma.user.update({
+        where: { email },
+        data: {
+          googleId,
+          provider: "google",
+          lastLogin: new Date(),
+        },
+        include: { merchantProfile: true },
+      });
+    }
+
+    const profileStatus =
+      user.merchantProfile?.profileStatus ?? "INCOMPLETE";
+
+
+    const tokens = generateTokens({
+      userId: user.id,
+      email: user.email,
+      role: user.role,
+      isVerified: user.emailVerified,
+      profileStatus,
+    });
+
+
+    await prisma.refreshToken.create({
+      data: {
+        userId: user.id,
+        token: tokens.refreshToken,
+        expiresAt,
+      },
+    });
+
+    return res.status(200).json({
+      success: true,
+      message: "Google login successful",
+      data: {
+        user: {
+          id: user.id,
+          email: user.email,
+          name: user.name,
+          role: user.role,
+          profileStatus,
+          isVerified: user.merchantProfile?.isVerified || false,
+        },
+        tokens,
+      },
+    });
+  } catch (error: any) {
+    console.error("Google login error:", error);
+    return res.status(500).json({
+      success: false,
+      message: "Google signup/login failed",
+      error: error.message,
+    });
+  }
+};
+
 
 /**
  * @route   POST /api/auth/refresh
@@ -352,3 +465,217 @@ export const getCurrentUser = async (req: Request, res: Response) => {
     });
   }
 };
+
+export const getOtp = async(req: Request, res: Response) => {
+  try {
+    const email = req.body.email;
+    if (!email){
+      return res.status(400).json({
+        success: false,
+        message: "Email is required to request a password reset OTP.",
+      })
+    }
+    const user = await prisma.user.findUnique({
+      where: {
+        email: email
+      }
+    });
+    if (!user){
+      return res.status(404).json({
+        success: false,
+        message: "No user found with the provided email."
+      });
+    }
+    const userOtp = await otpGenerator(3);
+    try {
+      const sendOtp = await sendForgotPasswordOTP(
+        user.email,
+        userOtp.otp
+      );
+    } catch (error) {
+      console.log(error)
+      return res.status(500).json({
+        success: false,
+        message: "Failed to send OTP email. Please try again later."
+      })
+    }
+    const seedOtp = await prisma.changePassword.create({
+      data:{
+        userId: user.id,
+        otpToken: userOtp.otp,
+        otpExpiry: userOtp.otpExpiry,
+        used: false
+      }
+    })
+    if (!seedOtp){
+      return res.status(400).json({
+        success: false,
+        message: "Could not generate OTP. Please try again."
+      })
+    }
+    return res.status(200).json({
+      success: true,
+      message: "An OTP has been sent to your email for password reset."
+    })
+
+  } catch (error: any) {
+    return res.status(500).json({
+      success: false,
+      message: "An error occurred while processing your request.",
+      error: error.message,
+    });
+  }
+}
+
+export const verifyOtp = async (req: Request, res: Response) => {
+  try {
+    const { email, otp } = req.body;
+    if (!email && !otp){
+      return res.status(400).json({
+        success: false,
+        message: "Both email and OTP are required for verification."
+      })
+    }
+    const user = await prisma.user.findUnique({
+      where: {
+        email: email
+      }
+    });
+
+    if (!user){
+      return res.status(404).json({
+        success: false,
+        message: "No user found with the provided email."
+      });
+    }
+
+    const userOtp = await prisma.changePassword.findFirst({
+      where:{
+        userId: user.id
+      },orderBy:{
+        createdAt: "desc"
+      }
+    })
+    if (!userOtp){
+      return res.status(404).json({
+        success: false,
+        message: "OTP not found. Please request a new one."
+      })
+    }
+    if (userOtp?.otpToken !== otp){
+      return res.status(400).json({
+        success: false, 
+        message: "The provided OTP is invalid."
+      });
+    }
+    if (userOtp?.otpExpiry! < new Date() ){
+      return res.status(400).json({
+        success: false,
+        message: "The provided OTP has expired. Please request a new one."
+      })
+    }
+    return res.status(200).json({
+      success: true,
+      message: "OTP has been verified successfully."
+    })
+  } catch (error: any) {
+    return res.status(500).json({
+      success: false,
+      message: "An error occurred while verifying the OTP.",
+      error: error.message
+    })
+  }
+}
+
+
+export const changePassword =  async (req: Request, res: Response) => {
+  try {
+    const parsedData = changePasswordSchema.safeParse(req.body);
+
+    if (!parsedData.success) {
+      const errors = parsedData.error.issues.map((issue) => ({
+        field: issue.path[0],
+        message: issue.message,
+      }));
+
+      return res.status(400).json({
+        success: false,
+        errors,
+      });
+    }
+    const {email, password, otp, confirmPassword} = parsedData.data;
+    
+    if (!email || !password || !confirmPassword || !otp){
+      return res.status(400).json({
+        success: false,
+        message: "Email, OTP, password, and confirmPassword are required."
+      });
+    }
+
+    const user = await prisma.user.findFirst({
+      where: { email }
+    });
+    if (!user){
+      return res.status(400).json({
+        success: false,
+        message: "No user found with the provided email."
+      })
+    }
+    const otpDetails = await prisma.changePassword.findFirst({
+      where:{
+        userId: user?.id
+      },
+      orderBy:{
+        createdAt: "desc"
+      }
+    })
+    if (otp !== otpDetails?.otpToken){
+      return res.status(400).json({
+        success: false,
+        otp: "The provided OTP is invalid."
+      });
+    }
+
+    if (otpDetails?.otpExpiry! < new Date() ){
+      return res.status(400).json({
+        success: false,
+        message: "The provided OTP has expired. Please request a new one."
+      })
+    }
+  
+    if (password !== confirmPassword){
+      return res.status(400).json({
+        success: false,
+        message: "Password and confirmPassword do not match."
+      });
+    }
+
+    const hashPassword = await bcrypt.hash(confirmPassword, 10);
+
+    const updatePassword = await prisma.user.update({
+      where: {
+        email
+      },
+      data:{
+        password: hashPassword
+      }
+    });
+    if (!updatePassword){
+      return res.status(400).json({
+        success: false,
+        message: "Failed to update password. Please try again."
+      });
+    }
+    return res.status(200).json({
+      success: true,
+      message: "Password has been updated successfully."
+    })
+  } catch (error: any) {
+    console.log(error);
+    return res.status(500).json({
+      success: false,
+      message: "An error occurred while changing the password.",
+      error: error.message
+    })
+  }
+}

@@ -9,7 +9,7 @@
     "prisma:generate": "prisma generate",
     "prisma:migrate": "prisma migrate dev",
     "prisma:studio": "prisma studio",
-    "prepare": "husky"
+    "start:dev": "ts-node src/server.ts"
   },
   "prisma": {
     "seed": "ts-node prisma/seed.ts"
@@ -21,9 +21,11 @@
     "bcrypt": "^5.1.1",
     "bullmq": "^5.66.0",
     "cors": "^2.8.5",
+    "crypto-js": "^4.2.0",
     "dotenv": "^16.3.1",
     "express": "^4.18.2",
     "express-session": "^1.18.2",
+    "google-auth-library": "^10.5.0",
     "ioredis": "^5.8.2",
     "jsonwebtoken": "^9.0.2",
     "multer": "^1.4.5-lts.1",
@@ -42,6 +44,7 @@
     "@commitlint/config-conventional": "^20.2.0",
     "@types/bcrypt": "^5.0.2",
     "@types/cors": "^2.8.17",
+    "@types/crypto-js": "^4.2.2",
     "@types/express": "^4.17.21",
     "@types/express-session": "^1.18.2",
     "@types/ioredis": "^4.28.10",

@@ -1,6 +1,7 @@
 
 
 import { Resend } from 'resend';
+import { otpTemplate } from '../templates/sendOTP';
 
 // Hardcoding the API Key and Frontend URL for now
 const RESEND_API_KEY = 're_iyEKPAa3_F83kdokpirXWGTUGZfEg3k8J';
@@ -15,7 +16,6 @@ export const sendWelcomeEmail = async (
   to: string,
   name: string,
   password: string,
-  businessName: string
 ) => {
   if (!resend) {
     console.log('Email not configured, skipping welcome email to:', to);
@@ -33,7 +33,7 @@ export const sendWelcomeEmail = async (
           
           <p>Hi ${name},</p>
           
-          <p>Your merchant account for <strong>${businessName}</strong> has been created and verified.</p>
+          <p>Your merchant account for <strong>${"businessName"}</strong> has been created and verified.</p>
           
           <div style="background-color: #f9f9f9; border: 1px solid #ddd; border-radius: 8px; padding: 20px; margin: 20px 0;">
             <h3 style="margin-top: 0;">Your Login Credentials:</h3>
@@ -131,5 +131,29 @@ export const sendGiftCardEmail = async (
     console.log('Gift card email sent to:', to);
   } catch (error) {
     console.error('Gift card email error:', error);
+  }
+};
+
+
+export const sendForgotPasswordOTP = async (
+  to: string,
+  otp: string
+) => {
+  if (!resend) {
+    console.log('Email not configured, skipping forgot password OTP to:', to);
+    return;
+  }
+
+  try {
+    await resend.emails.send({
+      from: 'THNX Digital <noreply@thnxdigital.com>',
+      to,
+      subject: 'Reset Your Password - THNX Digital',
+      html: otpTemplate(otp),
+    });
+
+  } catch (error) {
+    console.error('Forgot password OTP email error:', error);
+    throw error;
   }
 };
