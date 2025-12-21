@@ -472,7 +472,7 @@ export const getOtp = async(req: Request, res: Response) => {
     if (!email){
       return res.status(400).json({
         success: false,
-        message: "Email is required to change the password",
+        message: "Email is required to request a password reset OTP.",
       })
     }
     const user = await prisma.user.findUnique({
@@ -483,21 +483,20 @@ export const getOtp = async(req: Request, res: Response) => {
     if (!user){
       return res.status(404).json({
         success: false,
-        message: "No user found"
+        message: "No user found with the provided email."
       });
     }
     const userOtp = await otpGenerator(3);
     try {
-      await sendForgotPasswordOTP(
+      const sendOtp = await sendForgotPasswordOTP(
         user.email,
-        user.name,
         userOtp.otp
-      )
+      );
     } catch (error) {
       console.log(error)
       return res.status(500).json({
         success: false,
-        message: "The mail couldn't be sent."
+        message: "Failed to send OTP email. Please try again later."
       })
     }
     const seedOtp = await prisma.changePassword.create({
@@ -511,18 +510,18 @@ export const getOtp = async(req: Request, res: Response) => {
     if (!seedOtp){
       return res.status(400).json({
         success: false,
-        message: "Failed to create otp. Please try again."
+        message: "Could not generate OTP. Please try again."
       })
     }
     return res.status(200).json({
       success: true,
-      message: "Forgot Password OTP has been sent to your email."
+      message: "An OTP has been sent to your email for password reset."
     })
 
   } catch (error: any) {
     return res.status(500).json({
       success: false,
-      message: "Error fetching user data",
+      message: "An error occurred while processing your request.",
       error: error.message,
     });
   }
@@ -534,7 +533,7 @@ export const verifyOtp = async (req: Request, res: Response) => {
     if (!email && !otp){
       return res.status(400).json({
         success: false,
-        message: "Email and otp are required to verify the password."
+        message: "Both email and OTP are required for verification."
       })
     }
     const user = await prisma.user.findUnique({
@@ -546,7 +545,7 @@ export const verifyOtp = async (req: Request, res: Response) => {
     if (!user){
       return res.status(404).json({
         success: false,
-        message: "User not found with provieded email"
+        message: "No user found with the provided email."
       });
     }
 
@@ -560,19 +559,19 @@ export const verifyOtp = async (req: Request, res: Response) => {
     if (!userOtp){
       return res.status(404).json({
         success: false,
-        message: "OTP not found, please try requesting for otp once again."
+        message: "OTP not found. Please request a new one."
       })
     }
     if (userOtp?.otpToken !== otp){
       return res.status(400).json({
         success: false, 
-        message: "The provided otp is invalid."
+        message: "The provided OTP is invalid."
       });
     }
     if (userOtp?.otpExpiry! < new Date() ){
       return res.status(400).json({
         success: false,
-        message: "The provided otp has been expired."
+        message: "The provided OTP has expired. Please request a new one."
       })
     }
     return res.status(200).json({
@@ -582,7 +581,7 @@ export const verifyOtp = async (req: Request, res: Response) => {
   } catch (error: any) {
     return res.status(500).json({
       success: false,
-      message: "Error verifying otp",
+      message: "An error occurred while verifying the OTP.",
       error: error.message
     })
   }
@@ -609,14 +608,19 @@ export const changePassword =  async (req: Request, res: Response) => {
     if (!email || !password || !confirmPassword || !otp){
       return res.status(400).json({
         success: false,
-        message: "Email, otp, Password and confirmPassword required for password change."
+        message: "Email, OTP, password, and confirmPassword are required."
       });
     }
 
     const user = await prisma.user.findFirst({
       where: { email }
     });
-
+    if (!user){
+      return res.status(400).json({
+        success: false,
+        message: "No user found with the provided email."
+      })
+    }
     const otpDetails = await prisma.changePassword.findFirst({
       where:{
         userId: user?.id
@@ -625,31 +629,24 @@ export const changePassword =  async (req: Request, res: Response) => {
         createdAt: "desc"
       }
     })
-
-    if (!user){
-      return res.status(404).json({
-        success: false,
-        message: "User not found with the given email"
-      });
-    }
     if (otp !== otpDetails?.otpToken){
       return res.status(400).json({
         success: false,
-        otp: "The provided otp is invalid"
+        otp: "The provided OTP is invalid."
       });
     }
 
     if (otpDetails?.otpExpiry! < new Date() ){
       return res.status(400).json({
         success: false,
-        message: "The provided otp has been expired."
+        message: "The provided OTP has expired. Please request a new one."
       })
     }
   
     if (password !== confirmPassword){
       return res.status(400).json({
         success: false,
-        message: "Passwords do not match."
+        message: "Password and confirmPassword do not match."
       });
     }
 
@@ -666,18 +663,18 @@ export const changePassword =  async (req: Request, res: Response) => {
     if (!updatePassword){
       return res.status(400).json({
         success: false,
-        message: "Password coudln't be changed. Please try again."
+        message: "Failed to update password. Please try again."
       });
     }
     return res.status(200).json({
       success: true,
-      message: "Password changed successfully."
+      message: "Password has been updated successfully."
     })
   } catch (error: any) {
     console.log(error);
     return res.status(500).json({
       success: false,
-      message: "Error changing your password",
+      message: "An error occurred while changing the password.",
       error: error.message
     })
   }

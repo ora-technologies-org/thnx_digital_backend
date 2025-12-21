@@ -8,8 +8,8 @@ declare global {
       role: Role;
       isActive: boolean;
       emailVerified: boolean;
-      name: string;l
-      phone?: string | nul;
+      name: string;
+      phone?: string | null;
       avatar?: string | null;
     }
   }
