@@ -14,6 +14,10 @@ import { AnalyticsData } from "../interfaces/analyticsInterface";
 import { ActivityLogger } from "../services/activityLog.service";
 import { EmailService } from "../services/email.service";
 import { mode } from "crypto-js";
+import { StatusCodes } from "../utils/statusCodes";
+import { success } from "../utils/response";
+import { error } from "console";
+import { STATUS_CODES } from "http";
 /**
  * @route   POST /api/auth/merchant/register
  * @desc    Quick merchant registration (Step 1 - Minimal info)
@@ -740,11 +744,6 @@ export const adminCreateMerchant = async (req: Request, res: Response) => {
       req
     );
 
-
-    
-
-
-
     EmailService.sendWelcomeEmail(
       result.user.email,
       result.user.name || "Merchant",
@@ -752,18 +751,14 @@ export const adminCreateMerchant = async (req: Request, res: Response) => {
       businessName,
     );
 
-    return res.status(201).json({
-      success: true,
-      message: "Merchant created and verified successfully",
-      data: {
+    return res.status(StatusCodes.CREATED).json(success("Merchant created and verified successfully",  {
         user: {
           id: result.user.id,
           email: result.user.email,
           name: result.user.name,
           role: result.user.role,
         },
-      },
-    });
+      }));
   } catch (error: any) {
     console.error("Admin create merchant error:", error);
 
@@ -807,10 +802,7 @@ export const adminUpdateMerchant = async (req: Request, res: Response, next: Nex
     const invalidFields = sentFields.filter((field) => !allowedFileds.includes(field));
     
     if (invalidFields.length > 0){
-      return res.status(400).json({
-        success: false,
-        message: `You cannot update the following fields: ${invalidFields.join(" ,")}`
-      })
+      return res.status(StatusCodes.BAD_REQUEST).json(error(`You cannot update the following fields: ${invalidFields.join(" ,")}`))
     }
 
     for (const field of allowedFileds){
@@ -860,21 +852,11 @@ export const adminUpdateMerchant = async (req: Request, res: Response, next: Nex
         data: updateData
       })
       if (!updateMerchant){
-        return res.status(400).json({
-          success: true,
-          message: "Your profile couldn't be updated"
-        });
+        return res.status(StatusCodes.BAD_REQUEST).json(error("Your profile couldn't be updated."));
       }
-      return res.status(200).json({
-        success :true,
-        message: "Profile updated successfully.",
-        data: updateMerchant
-      })
+      return res.status(StatusCodes.OK).json(success("Profile updated successfully.", updateMerchant))
     }else{
-      return res.status(200).json({
-        success :false,
-        message: "This merchant profile cannot be updated at its current status.",
-      })
+      return res.status(StatusCodes.BAD_REQUEST).json(error("This merchant profile cannot be updated at its current status."))
     }
 
   } catch (error: any) {
@@ -933,13 +915,10 @@ export const getPendingMerchants = async (req: Request, res: Response) => {
       },
     });
 
-    return res.status(200).json({
-      success: true,
-      data: {
+    return res.status(StatusCodes.OK).json(success("Pending merchants fetched successfully",{
         merchants: pendingMerchants,
         count: pendingMerchants.length,
-      },
-    });
+      }));
   } catch (error: any) {
     console.error("Get pending merchants error:", error);
     return res.status(500).json({
@@ -963,17 +942,11 @@ export const verifyMerchant = async (req: Request, res: Response) => {
     const adminId = authReq.authUser?.userId;
 
     if (action === "approve" && !verificationNotes){
-      return res.status(400).json({
-        success: false,
-        message: "Verification note is required.",
-      });
+      return res.status(StatusCodes.BAD_REQUEST).json(error("Verification note is required."));
     }
 
     if (action === "reject" && !rejectionReason) {
-      return res.status(400).json({
-        success: false,
-        message: "Rejection reason is required.",
-      });
+      return res.status(StatusCodes.BAD_REQUEST).json(error("Rejection reason is required."));
     }
 
     const merchantProfile = await prisma.merchantProfile.findUnique({
@@ -984,17 +957,11 @@ export const verifyMerchant = async (req: Request, res: Response) => {
     });
 
     if (!merchantProfile) {
-      return res.status(404).json({
-        success: false,
-        message: "Merchant profile not found",
-      });
+      return res.status(StatusCodes.NOT_FOUND).json(error("Merchant profile not found."));
     }
 
     if (merchantProfile.profileStatus === "VERIFIED") {
-      return res.status(400).json({
-        success: false,
-        message: "Merchant is already verified",
-      });
+      return res.status(StatusCodes.BAD_REQUEST).json(error("Merchant is already verified."));
     }
 
     const updatedProfile = await prisma.merchantProfile.update({
@@ -1046,13 +1013,7 @@ export const verifyMerchant = async (req: Request, res: Response) => {
       );
     }
 
-    return res.status(200).json({
-      success: true,
-      message: `Merchant ${action === "approve" ? "approved" : "rejected"} successfully`,
-      data: {
-        profile: updatedProfile,
-      },
-    });
+    return res.status(StatusCodes.OK).json(success(`Merchant ${action === "approve" ? "approved" : "rejected"} successfully`, {profile: updatedProfile}));
   } catch (error: any) {
     console.error("Verify merchant error:", error);
     return res.status(500).json({
@@ -1142,14 +1103,11 @@ export const getAllMerchants = async (req: Request, res: Response) => {
       counts[item.profileStatus] = item._count.profileStatus;
     });
 
-    return res.status(200).json({
-      success: true,
-      data: {
+    return res.status(StatusCodes.OK).json(success("Merchants fetched successfully.", {
         count: merchants.length,
         statusCounts: counts,
         merchants,
-      },
-    });
+      }));
   } catch (error: any) {
     console.error("Get all merchants error:", error);
     return res.status(500).json({
@@ -1163,7 +1121,6 @@ export const getAllMerchants = async (req: Request, res: Response) => {
 export const getMerchantById = async (req: Request, res: Response) => {
   try {
     const { merchantId } = req.params;
-    console.log(merchantId);
     const merchant = await prisma.merchantProfile.findUnique({
       where:{
         id: merchantId
@@ -1195,11 +1152,7 @@ export const getMerchantById = async (req: Request, res: Response) => {
         message: "Merchant not found with the given id."
       })
     }
-    return res.status(200).json({
-      success: true,
-      message: "Merchant fetched successfully",
-      data: merchant
-    });
+    return res.status(StatusCodes.OK).json(success("Merchant fetched successfully", merchant));
 
   } catch (error: any) {
     console.error("Get all merchants error:", error);
@@ -1232,10 +1185,7 @@ export const deleteMerchant = async (req: Request, res: Response, next: NextFunc
     });
 
     if (!merchantProfile) {
-      return res.status(404).json({
-        success: false,
-        message: "Merchant not found",
-      });
+      return res.status(StatusCodes.NOT_FOUND).json(error("Merchant not found"));
     }
 
     if (hardDelete) {
@@ -1275,12 +1225,7 @@ export const deleteMerchant = async (req: Request, res: Response, next: NextFunc
         req
       });
 
-
-
-      return res.status(200).json({
-        success: true,
-        message: "Merchant permanently deleted",
-      });
+      return res.status(StatusCodes.OK).json("Merchant permanently deleted.");
     } else {
       // Soft delete - deactivate the user
       await prisma.user.update({
@@ -1296,15 +1241,11 @@ export const deleteMerchant = async (req: Request, res: Response, next: NextFunc
       await ActivityLogger.userDeactivated(merchantId, adminId!, req);
 
 
-      return res.status(200).json({
-        success: true,
-        message: "Merchant deactivated successfully",
-        data: {
+      return res.status(StatusCodes.OK).json(success("Merchant deactivated successfully.", 
+        {
           merchantId,
-          email: merchantProfile.user.email,
-        },
-      });
-    }
+          email: merchantProfile.user.email}))
+        }
   } catch (error: any) {
     console.error("Delete merchant error:", error);
     return res.status(500).json({
@@ -1408,11 +1349,7 @@ export const updateMerchantData = async (req: Request, res: Response, next: Next
         message: "Your profile couldn't be updated"
       });
     }
-    return res.status(200).json({
-      success :true,
-      message: "Profile updated successfully.",
-      data: updateMerchant
-    })
+    return res.status(StatusCodes.OK).json(success("Profile updated successfully", updateMerchant))
 
   } catch (error: any) {
       next(error);
@@ -1429,16 +1366,9 @@ export const getGiftCardByMerchant = async (req: Request, res: Response, next: N
       }
     });
     if (!giftCards){
-      return res.status(404).json({
-        success: false,
-        message: "No gift cards have been issued by this merchant yet."
-      })
+      return res.status(StatusCodes.NOT_FOUND).json(error("No gift cards have been issued by this merchant yet."))
     }
-    return res.status(200).json({
-      success: true,
-      message: "Gift cards fetched successfully.",
-      data: giftCards
-    });
+    return res.status(StatusCodes.OK).json(success("Gift cards fetched successfully.", giftCards));
 
     
   } catch (error: any) {
@@ -1458,16 +1388,9 @@ export const getVerifiedMerchants = async (req: Request, res: Response, next: Ne
       }
     });
     if (!merchant){
-      return res.status(400).json({
-        success: false,
-        message: "Merchants not found"
-      })
+      return res.status(StatusCodes.NOT_FOUND).json(error("Merchants not found"));
     }
-    return res.status(200).json({
-      success: true,
-      message: "Merchants fetched successfully",
-      data: merchant
-    })
+    return res.status(StatusCodes.OK).json(success("Merchants fetched successfully", merchant));
   } catch (error: any) {
     return res.status(500).json({
       success: false,
@@ -1598,11 +1521,7 @@ export const getOverallAnalytics = async (
       cardUtilization,
     };
 
-    return res.status(200).json({
-      success: true,
-      message: 'Analytics fetched successfully',
-      data: analyticsData,
-    });
+    return res.status(StatusCodes.OK).json(success("Analytics fetched successfully", analyticsData));
   } catch (error: any) {
     console.error('Analytics Error:', error);
     return res.status(500).json({
@@ -1923,10 +1842,7 @@ export const createSupportTicket = async (req: Request, res: Response, next: Nex
   try {
     const { query, title } = req.body;
     if (!query || !title){
-      return res.status(400).json({
-        success: false,
-        message: "Query and title are required to create a support ticket."
-      });
+      return res.status(StatusCodes.BAD_REQUEST).json(error("Query and title are required to create a support ticket."));
     }
     const userId = req.authUser?.userId;
     const merchant = await prisma.merchantProfile.findUnique({
@@ -1935,10 +1851,7 @@ export const createSupportTicket = async (req: Request, res: Response, next: Nex
       }
     });
     if (!merchant){
-      return res.status(404).json({
-        success: true,
-        message: "Merchant not found with given id."
-      });
+      return res.status(StatusCodes.NOT_FOUND).json(error("Merchant not found with given id."));
     }
     const createTicket = await prisma.supportTicket.create({
       data:{
@@ -1948,16 +1861,9 @@ export const createSupportTicket = async (req: Request, res: Response, next: Nex
       }
     });
     if (!createTicket){
-      return res.status(400).json({
-        success: false,
-        message: "Failed creating a support ticket"
-      });
+      return res.status(StatusCodes.BAD_REQUEST).json(error("Failed creating a support ticket"));
     }
-    return res.status(200).json({
-      success: true,
-      message: "Support ticket created succesfully.",
-      data: createTicket
-    });
+    return res.status(StatusCodes.OK).json(success("Support ticket created succesfully.", createTicket));
 
   } catch (error: any) {
     return res.status(500).json({
@@ -2011,17 +1917,10 @@ export const getAllSupportTickets = async (req:Request, res: Response, next: Nex
       }
     });
     if (!supportTickets){
-      return res.status(400).json({
-        success: false,
-        message: "Couldn't fetch support tickets."
-      });
+      return res.status(StatusCodes.BAD_REQUEST).json(error("Couldn't fetch support tickets."));
     }
-    return res.status(200).json({
-      success: true,
-      message: "Fetched support tickets successfully.",
-      count: supportTickets.length,
-      data: supportTickets
-    });
+    return res.status(200).json(success("Fetched support tickets successfully.", {count: supportTickets.length,
+      data: supportTickets}));
   } catch (error: any) {
     return res.status(500).json({
       success: false,
@@ -2040,16 +1939,9 @@ export const getSupportTicketById = async (req: Request, res: Response, next: Ne
       }
     });
     if (!ticketId){
-      return res.status(404).json({
-        success: true,
-        message: "No support ticket found with given id."
-      })
+      return res.status(StatusCodes.NOT_FOUND).json(error("No support ticket found with given id."))
     }
-    return res.status(200).json({
-      success: true,
-      message: "Support ticket fetched successfully",
-      data: supportTicket
-    });
+    return res.status(StatusCodes.OK).json(success("Support ticket fetched successfully", supportTicket));
 
   } catch (error: any) {
     return res.status(500).json({
@@ -2065,17 +1957,11 @@ export const updateSupportTicket = async (req: Request, res: Response, next: Nex
     const { ticketId } = req.params;
     const { response, status } = req.body;
     if (!response && !status){
-      return res.status(400).json({
-        success: false,
-        message: "Response and status are required to update the ticket."
-      })
+      return res.status(StatusCodes.BAD_REQUEST).json(error("Response and status are required to update the ticket."))
     }
 
     if (status !== "CLOSE" && status !== "IN_PROGRESS"){
-      return res.status(400).json({
-        success: true,
-        message: "Status can either be CLOSE or IN_PROGRESS"
-      });
+      return res.status(StatusCodes.BAD_REQUEST).json(error("Status can either be CLOSE or IN_PROGRESS"));
     }
     
     const supportTicket = await prisma.supportTicket.findFirst({
@@ -2084,10 +1970,7 @@ export const updateSupportTicket = async (req: Request, res: Response, next: Nex
       }
     });
     if (!supportTicket){
-      return res.status(404).json({
-        success: false,
-        message: "Support ticket not found!",
-      })
+      return res.status(StatusCodes.NOT_FOUND).json(error("Support ticket not found!"))
     }
     const updateSupportTicket = await prisma.supportTicket.update({
       where:{
@@ -2099,21 +1982,11 @@ export const updateSupportTicket = async (req: Request, res: Response, next: Nex
       }
     })
     if (!updateSupportTicket){
-      return res.status(400).json({
-        success: false, 
-        message: "Support Ticket couldn't be updated."
-      })
+      return res.status(StatusCodes.BAD_REQUEST).json(error("Support Ticket couldn't be updated."));
     }
-    return res.status(200).json({
-      success: true,
-      message: "Support Ticket updated successfully.",
-      data: updateSupportTicket
-    })
-  } catch (error) {
-    return res.status(500).json({
-      success: false,
-      message: "Error updating support ticket"
-    })
+    return res.status(StatusCodes.OK).json(success("Support Ticket updated successfully", updateSupportTicket));
+  } catch (error: any) {
+      return res.status(StatusCodes.INTERNAL_SERVER_ERROR).json(error("Internal Server error", error.message));
   }
 }
 
@@ -2128,10 +2001,7 @@ export const getPurchaseOrders = async (req: Request, res: Response, next: NextF
       }
     });
     if (!merchant){
-      return res.status(400).json({
-        success: false,
-        message: "Merchant not found with given id"
-      });
+      return res.status(StatusCodes.BAD_REQUEST).json(error("Merchant not found with given id"));
     }
 
     const orders = await prisma.purchasedGiftCard.findMany({
@@ -2160,17 +2030,9 @@ export const getPurchaseOrders = async (req: Request, res: Response, next: NextF
         purchasedAt: order === "asc" ? "asc" : "desc"
       }
     });
-    console.log(orders)
-    return res.status(200).json({
-      success: true,
-      message: "Purchased orders fetched successfully",
-      data: orders
-    });
+    return res.status(StatusCodes.OK).json(success("Purchased orders fetched successfully.", orders));
 
-  } catch (error) {
-    return res.status(500).json({
-      success: false,
-      message: "Error fetching purchase details."
-    })
+  } catch (error: any) {
+      return res.status(StatusCodes.INTERNAL_SERVER_ERROR).json(error("Internal Server error", error.message));
   }
 }
