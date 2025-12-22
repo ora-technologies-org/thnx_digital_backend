@@ -220,6 +220,7 @@ model PurchasedGiftCard {
   lastUsedAt  DateTime?
 
   redemptions Redemption[]
+  giftCardOtp GiftCardOtp[]
   @@index([qrCode])
   @@index([customerEmail])
   @@index([giftCardId])
@@ -244,11 +245,24 @@ model Redemption {
 
   redeemedAt DateTime @default(now())
 
+
   @@index([purchasedGiftCardId])
   @@index([redeemedById])
   @@map("redemptions")
 }
 
+model GiftCardOtp{
+  id                  String @id @default(uuid())
+  purchasedGiftCardId           String
+  purchased           PurchasedGiftCard @relation(fields: [purchasedGiftCardId], references: [id])
+
+  //otp
+  otpToken            String
+  otpExpiry           String
+  used                Boolean
+  createdAt           DateTime @default(now())
+  updateAt           DateTime @updatedAt
+}
 
 model ChangePassword { 
   id                  String     @id @default(uuid())
