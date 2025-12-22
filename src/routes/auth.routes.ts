@@ -19,6 +19,8 @@ import {
   completeProfile,
   merchantRegister,
 } from "../controllers/merchant.controller";
+import { validate } from "../middleware/validation.middleware";
+import { changePasswordSchema, loginSchema, resetPasswordSchema } from "../validators/auth.validator";
 
 const router = express.Router();
 
@@ -122,7 +124,7 @@ router.post("/merchant/register", merchantRegister);
  *       500:
  *         $ref: '#/components/responses/InternalServerError'
  */
-router.post("/login", login);
+router.post("/login", validate(loginSchema) ,login);
 
 /**
  * @swagger
@@ -461,11 +463,11 @@ router.get("/me", authenticate, getCurrentUser);
 
 router.post("/get-otp", getOtp);
 router.post("/verify-otp", verifyOtp);
-router.post("/reset-password", changePassword);
+router.post("/reset-password", validate(changePasswordSchema), changePassword);
 
 router.post("/google-login", googleLogin);
 
-router.post("/change-password", authenticate, authorize("MERCHANT"), resetPassword);
-router.post("/admin-password",authenticate, authorize("ADMIN"), resetAdminPassword);
+router.post("/change-password", authenticate, authorize("MERCHANT"), validate(resetPasswordSchema), resetPassword);
+router.post("/admin-password",authenticate, authorize("ADMIN"), validate(resetPasswordSchema), resetAdminPassword);
 
 export default router;

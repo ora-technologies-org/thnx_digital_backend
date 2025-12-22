@@ -29,10 +29,11 @@ export interface AuthenticatedRequest extends Request {
  */
 export const login = async (req: Request, res: Response) => {
   try {
-    const validatedData = loginSchema.parse(req.body);
+
+    const { email, password } = req.body; 
 
     const user = await prisma.user.findUnique({
-      where: { email: validatedData.email },
+      where: { email: email },
       include: {
         merchantProfile: {
           select: {
@@ -45,7 +46,7 @@ export const login = async (req: Request, res: Response) => {
 
     if (!user) {
 
-      await ActivityLogger.loginFailed(validatedData.email, 'User not found', req);
+      await ActivityLogger.loginFailed(email, 'User not found', req);
 
       return res.status(401).json({
         success: false,
@@ -54,7 +55,7 @@ export const login = async (req: Request, res: Response) => {
     }
 
     if (!user.isActive) {
-      await ActivityLogger.loginFailed(validatedData.email, 'Account deactivated', req);
+      await ActivityLogger.loginFailed(email, 'Account deactivated', req);
 
       return res.status(403).json({
         success: false,
@@ -64,19 +65,19 @@ export const login = async (req: Request, res: Response) => {
 
     if (user.password) {
       const isPasswordValid = await bcrypt.compare(
-        validatedData.password,
+        password,
         user.password,
       );
 
       if (!isPasswordValid) {
-        await ActivityLogger.loginFailed(validatedData.email, 'Invalid password', req);
+        await ActivityLogger.loginFailed(email, 'Invalid password', req);
         return res.status(401).json({
           success: false,
           message: "Invalid email or password",
         });
       }
     } else {
-      await ActivityLogger.loginFailed(validatedData.email, 'OAuth account attempted password login', req);
+      await ActivityLogger.loginFailed(email, 'OAuth account attempted password login', req);
       return res.status(400).json({
         success: false,
         message: "This account uses OAuth. Please login with Google.",
@@ -593,20 +594,8 @@ export const verifyOtp = async (req: Request, res: Response) => {
 
 export const changePassword =  async (req: Request, res: Response) => {
   try {
-    const parsedData = changePasswordSchema.safeParse(req.body);
-
-    if (!parsedData.success) {
-      const errors = parsedData.error.issues.map((issue) => ({
-        field: issue.path[0],
-        message: issue.message,
-      }));
-
-      return res.status(400).json({
-        success: false,
-        errors,
-      });
-    }
-    const {email, password, otp, confirmPassword} = parsedData.data;
+    
+    const {email, password, otp, confirmPassword} = req.body;
     
     if (!email || !password || !confirmPassword || !otp){
       return res.status(400).json({
@@ -688,20 +677,8 @@ export const changePassword =  async (req: Request, res: Response) => {
 export const resetPassword = async (req: Request, res: Response) => {
   try {
     const id = req.authUser?.userId;
-    const parsedData = resetPasswordSchema.safeParse(req.body);
-    if (!parsedData.success) {
-      const errors = parsedData.error.issues.map((issue) => ({
-        field: issue.path[0],
-        message: issue.message,
-      }));
 
-      return res.status(400).json({
-        success: false,
-        errors,
-      });
-    }
-
-    const { password, newPassword, confirmPassword} = parsedData.data;
+    const { password, newPassword, confirmPassword} = req.body;
     const user = await prisma.user.findFirst({
       where:{
         id: id
@@ -760,19 +737,8 @@ export const resetPassword = async (req: Request, res: Response) => {
 export const resetAdminPassword = async(req: Request, res: Response, next: NextFunction) => {
   try {
     const userId = req.authUser?.userId;
-    const parsedData = resetPasswordSchema.safeParse(req.body);
-    if (!parsedData.success) {
-      const errors = parsedData.error.issues.map((issue) => ({
-        field: issue.path[0],
-        message: issue.message,
-      }));
-
-      return res.status(400).json({
-        success: false,
-        errors,
-      });
-    }
-    const { password, newPassword, confirmPassword } = parsedData.data;
+  
+    const { password, newPassword, confirmPassword } = req.body;
     if (newPassword !== confirmPassword){
       return res.status(400).json({
         success: false,

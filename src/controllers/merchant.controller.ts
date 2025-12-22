@@ -21,10 +21,22 @@ import { mode } from "crypto-js";
  */
 export const merchantRegister = async (req: Request, res: Response) => {
   try {
-    const validatedData = merchantQuickRegisterSchema.parse(req.body);
+    const validatedData = merchantQuickRegisterSchema.safeParse(req.body);
+    if (!validatedData.success) {
+        const errors = validatedData.error.issues.map((issue) => ({
+          field: issue.path[0],
+          message: issue.message,
+        }));
+
+        return res.status(400).json({
+          success: false,
+          errors,
+        });
+      }
+      const {email, password, name, phone,} = validatedData.data;
 
     const existingUser = await prisma.user.findUnique({
-      where: { email: validatedData.email },
+      where: { email: email },
     });
 
     if (existingUser) {
@@ -34,15 +46,15 @@ export const merchantRegister = async (req: Request, res: Response) => {
       });
     }
 
-    const hashedPassword = await bcrypt.hash(validatedData.password, 10);
+    const hashedPassword = await bcrypt.hash(password, 10);
 
     const user = await prisma.$transaction(async (tx) => {
       const newUser = await tx.user.create({
         data: {
-          email: validatedData.email,
+          email: email,
           password: hashedPassword,
-          name: validatedData.name,
-          phone: validatedData.phone,
+          name: name,
+          phone: phone,
           role: "MERCHANT",
           emailVerified: false,
           isActive: true,
@@ -53,7 +65,7 @@ export const merchantRegister = async (req: Request, res: Response) => {
       // await tx.merchantProfile.create({
       //   data: {
       //     userId: newUser.id,
-      //     businessName: validatedData.businessName,
+      //     businessName: businessName,
       //     profileStatus: "INCOMPLETE",
       //     isVerified: false,
       //   },
@@ -69,8 +81,8 @@ export const merchantRegister = async (req: Request, res: Response) => {
     EmailService.sendWelcomeEmail(
       user.email,
       user.name || "Merchant",
-      validatedData.password, // Send original password (before hashing)
-      validatedData.name,
+      password, // Send original password (before hashing)
+      name,
     );
 
     const tokens = generateTokens({
@@ -620,12 +632,12 @@ export const updateMerchantProfile = async (req: Request, res: Response) => {
 export const adminCreateMerchant = async (req: Request, res: Response) => {
   try {
     const authReq = req as AuthenticatedRequest;
-    const validatedData = adminCreateMerchantSchema.parse(req.body);
+    const { email, password, name, phone, businessName, businessRegistrationNumber, taxId, businessType, businessCategory, address, city, state, zipCode, country, businessPhone, businessEmail, website, bankName, accountNumber, accountHolderName, ifscCode, swiftCode, description } = req.body;
     const adminId = authReq.authUser?.userId;
     const files = req.files as { [fieldname: string]: Express.Multer.File[] };
 
     const existingUser = await prisma.user.findUnique({
-      where: { email: validatedData.email },
+      where: { email: email },
     });
 
     if (existingUser) {
@@ -637,7 +649,7 @@ export const adminCreateMerchant = async (req: Request, res: Response) => {
 
     const existsRegistrationNumber = await prisma.merchantProfile.findFirst({
       where: {
-        businessRegistrationNumber: validatedData.businessRegistrationNumber
+        businessRegistrationNumber: businessRegistrationNumber
       }
     })
 
@@ -656,15 +668,15 @@ export const adminCreateMerchant = async (req: Request, res: Response) => {
         businessLogo: files?.businessLogo?.[0].path || "uploads/merchant-documents/static_logo.svg"
     };
 
-    const hashedPassword = await bcrypt.hash(validatedData.password, 10);
+    const hashedPassword = await bcrypt.hash(password, 10);
 
     const result = await prisma.$transaction(async (tx) => {
       const newUser = await tx.user.create({
         data: {
-          email: validatedData.email,
+          email: email,
           password: hashedPassword,
-          name: validatedData.name,
-          phone: validatedData.phone,
+          name: name,
+          phone: phone,
           role: "MERCHANT",
           emailVerified: true,
           isActive: true,
@@ -676,30 +688,30 @@ export const adminCreateMerchant = async (req: Request, res: Response) => {
       const merchantProfile = await tx.merchantProfile.create({
         data: {
           userId: newUser.id,
-          businessName: validatedData.businessName,
+          businessName: businessName,
           businessLogo: documentData.businessLogo,
-          businessRegistrationNumber: validatedData.businessRegistrationNumber,
-          taxId: validatedData.taxId,
-          businessType: validatedData.businessType,
-          businessCategory: validatedData.businessCategory,
-          address: validatedData.address,
-          city: validatedData.city,
-          state: validatedData.state,
-          zipCode: validatedData.zipCode,
-          country: validatedData.country,
-          businessPhone: validatedData.businessPhone,
-          businessEmail: validatedData.businessEmail,
-          website: validatedData.website,
-          description: validatedData.description,
+          businessRegistrationNumber: businessRegistrationNumber,
+          taxId: taxId,
+          businessType: businessType,
+          businessCategory: businessCategory,
+          address: address,
+          city: city,
+          state: state,
+          zipCode: zipCode,
+          country: country,
+          businessPhone: businessPhone,
+          businessEmail: businessEmail,
+          website: website,
+          description: description,
           profileStatus: "VERIFIED",
           isVerified: true,
           verifiedAt: new Date(),
           verifiedById: adminId,
-          bankName: validatedData.bankName,
-          accountNumber: validatedData.accountNumber,
-          accountHolderName: validatedData.accountHolderName,
-          ifscCode: validatedData.ifscCode,
-          swiftCode: validatedData.swiftCode,
+          bankName: bankName,
+          accountNumber: accountNumber,
+          accountHolderName: accountHolderName,
+          ifscCode: ifscCode,
+          swiftCode: swiftCode,
           taxDocument: documentData.taxDocument,
           identityDocument: documentData.identityDocument,
           additionalDocuments: documentData.additionalDocuments,
@@ -716,14 +728,14 @@ export const adminCreateMerchant = async (req: Request, res: Response) => {
     await ActivityLogger.merchantProfileCreated(
       result.merchantProfile.id,
       result.user.id,
-      validatedData.businessName,
+      businessName,
       req
     );
     
     // Log auto-verification by admin
     ActivityLogger.merchantVerified(
       result.merchantProfile.id,
-      validatedData.businessName,
+      businessName,
       adminId!,
       req
     );
@@ -736,8 +748,8 @@ export const adminCreateMerchant = async (req: Request, res: Response) => {
     EmailService.sendWelcomeEmail(
       result.user.email,
       result.user.name || "Merchant",
-      validatedData.password,
-      validatedData.businessName,
+      password,
+      businessName,
     );
 
     return res.status(201).json({
@@ -950,17 +962,17 @@ export const verifyMerchant = async (req: Request, res: Response) => {
     const { action, rejectionReason, verificationNotes } = req.body;
     const adminId = authReq.authUser?.userId;
 
-    if (!["approve", "reject"].includes(action)) {
+    if (action === "approve" && !verificationNotes){
       return res.status(400).json({
         success: false,
-        message: 'Invalid action. Must be "approve" or "reject"',
+        message: "Verification note is required.",
       });
     }
 
     if (action === "reject" && !rejectionReason) {
       return res.status(400).json({
         success: false,
-        message: "Rejection reason is required",
+        message: "Rejection reason is required.",
       });
     }
 
@@ -2125,7 +2137,7 @@ export const getPurchaseOrders = async (req: Request, res: Response, next: NextF
     const orders = await prisma.purchasedGiftCard.findMany({
       where: {
         giftCard: {
-          merchantId: merchant.id
+          merchantId: userId
         },
         ...(search && {
           OR: [
@@ -2148,6 +2160,7 @@ export const getPurchaseOrders = async (req: Request, res: Response, next: NextF
         purchasedAt: order === "asc" ? "asc" : "desc"
       }
     });
+    console.log(orders)
     return res.status(200).json({
       success: true,
       message: "Purchased orders fetched successfully",

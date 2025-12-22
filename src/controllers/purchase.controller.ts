@@ -28,8 +28,9 @@ export const purchaseGiftCard = async (req: Request, res: Response) => {
     const { giftCardId } = req.params;
 
     // Validate request body
-    const validatedData = purchaseGiftCardSchema.parse(req.body);
+    // const validatedData = purchaseGiftCardSchema.parse(req.body);
 
+    const { customerName, customerEmail, customerPhone, paymentMethod, transactionId } = req.body
     // Check if gift card exists and is active
     const giftCard = await prisma.giftCard.findUnique({
       where: { id: giftCardId },
@@ -58,7 +59,7 @@ export const purchaseGiftCard = async (req: Request, res: Response) => {
         description: `Purchase failed - gift card "${giftCard.title}" is inactive`,
         resourceType: 'gift_card',
         resourceId: giftCardId,
-        metadata: { customerEmail: validatedData.customerEmail, reason: 'inactive' },
+        metadata: { customerEmail: customerEmail, reason: 'inactive' },
         merchantId: giftCard.merchantId,
         severity: 'WARNING',
         req
@@ -81,7 +82,7 @@ export const purchaseGiftCard = async (req: Request, res: Response) => {
         description: `Purchase failed - gift card "${giftCard.title}" is expired`,
         resourceType: 'gift_card',
         resourceId: giftCardId,
-        metadata: { customerEmail: validatedData.customerEmail, reason: 'expired', expiryDate: giftCard.expiryDate },
+        metadata: { customerEmail: customerEmail, reason: 'expired', expiryDate: giftCard.expiryDate },
         merchantId: giftCard.merchantId,
         severity: 'WARNING',
         req
@@ -100,15 +101,15 @@ export const purchaseGiftCard = async (req: Request, res: Response) => {
       data: {
         giftCardId: giftCard.id,
         qrCode,
-        customerName: validatedData.customerName,
-        customerEmail: validatedData.customerEmail,
-        customerPhone: validatedData.customerPhone,
+        customerName: customerName,
+        customerEmail: customerEmail,
+        customerPhone: customerPhone,
         purchaseAmount: giftCard.price,
         currentBalance: giftCard.price,
         expiresAt: giftCard.expiryDate,
-        paymentMethod: validatedData.paymentMethod,
-        transactionId: validatedData.transactionId,
-        paymentStatus: validatedData.transactionId ? "COMPLETED" : "PENDING",
+        paymentMethod: paymentMethod,
+        transactionId: transactionId,
+        paymentStatus: transactionId ? "COMPLETED" : "PENDING",
       },
       include: {
         giftCard: {
@@ -126,17 +127,17 @@ export const purchaseGiftCard = async (req: Request, res: Response) => {
     ActivityLogger.purchaseCreated(
       purchasedCard.id,
       giftCard.title,
-      validatedData.customerEmail,
+      customerEmail,
       giftCard.price.toNumber(),
       giftCard.merchantId,
       req
     );
 
     // Log payment status
-    if (validatedData.transactionId) {
+    if (transactionId) {
       ActivityLogger.paymentCompleted(
         purchasedCard.id,
-        validatedData.transactionId,
+        transactionId,
         giftCard.price.toNumber(),
         giftCard.merchantId
       );
@@ -163,7 +164,7 @@ export const purchaseGiftCard = async (req: Request, res: Response) => {
         actorType: 'system',
         action: 'email_failed',
         category: 'PURCHASE',
-        description: `Failed to send gift card email to ${validatedData.customerEmail}`,
+        description: `Failed to send gift card email to ${customerEmail}`,
         resourceType: 'purchased_gift_card',
         resourceId: purchasedCard.id,
         metadata: { error: (emailError as Error).message },
@@ -356,11 +357,12 @@ export const redeemGiftCard = async (req: Request, res: Response) => {
     }
 
     // Validate request body
-    const validatedData = redeemGiftCardSchema.parse(req.body);
+
+    const {qrCode, amount, locationName, locationAddress, notes} = req.body;
 
     // Find purchased gift card
     const purchasedCard = await prisma.purchasedGiftCard.findUnique({
-      where: { qrCode: validatedData.qrCode },
+      where: { qrCode: qrCode },
       include: {
         giftCard: {
           include: {
@@ -372,7 +374,7 @@ export const redeemGiftCard = async (req: Request, res: Response) => {
 
     if (!purchasedCard) {
       await ActivityLogger.verificationFailed(
-        validatedData.qrCode,
+        qrCode,
         'Invalid QR code',
         merchantId,
         undefined,
@@ -390,7 +392,7 @@ export const redeemGiftCard = async (req: Request, res: Response) => {
     if (purchasedCard.giftCard.merchantId !== merchantId) {
 
       await ActivityLogger.verificationFailed(
-        validatedData.qrCode,
+        qrCode,
         'Gift card belongs to different merchant',
         merchantId,
         purchasedCard.giftCard.merchantId,
@@ -407,7 +409,7 @@ export const redeemGiftCard = async (req: Request, res: Response) => {
     if (new Date() > purchasedCard.expiresAt) {
 
       await ActivityLogger.verificationFailed(
-        validatedData.qrCode,
+        qrCode,
         'Gift card expired',
         merchantId,
         merchantId,
@@ -424,7 +426,7 @@ export const redeemGiftCard = async (req: Request, res: Response) => {
     if (purchasedCard.status !== "ACTIVE") {
 
       await ActivityLogger.verificationFailed(
-        validatedData.qrCode,
+        qrCode,
         `Gift card status: ${purchasedCard.status}`,
         merchantId,
         merchantId,
@@ -439,20 +441,20 @@ export const redeemGiftCard = async (req: Request, res: Response) => {
 
     // Check if sufficient balance
     const currentBalance = purchasedCard.currentBalance.toNumber();
-    if (validatedData.amount > currentBalance) {
+    if (amount > currentBalance) {
 
       await ActivityLogger.log({
         actorId: merchantId,
         actorType: 'merchant',
         action: 'redemption_failed',
         category: 'REDEMPTION',
-        description: `Redemption failed - insufficient balance. Requested: ₹${validatedData.amount}, Available: ₹${currentBalance}`,
+        description: `Redemption failed - insufficient balance. Requested: ₹${amount}, Available: ₹${currentBalance}`,
         resourceType: 'purchased_gift_card',
         resourceId: purchasedCard.id,
         metadata: { 
-          requestedAmount: validatedData.amount, 
+          requestedAmount: amount, 
           availableBalance: currentBalance,
-          qrCode: validatedData.qrCode.substring(0, 8) + '...'
+          qrCode: qrCode.substring(0, 8) + '...'
         },
         merchantId,
         severity: 'WARNING',
@@ -462,12 +464,12 @@ export const redeemGiftCard = async (req: Request, res: Response) => {
         success: false,
         message: `Insufficient balance. Available: ₹${currentBalance.toFixed(2)}`,
         currentBalance: currentBalance.toFixed(2),
-        requestedAmount: validatedData.amount.toFixed(2),
+        requestedAmount: amount.toFixed(2),
       });
     }
 
     // Calculate new balance
-    const newBalance = currentBalance - validatedData.amount;
+    const newBalance = currentBalance - amount;
     const balanceBefore = new Decimal(currentBalance);
     const balanceAfter = new Decimal(newBalance);
 
@@ -478,12 +480,12 @@ export const redeemGiftCard = async (req: Request, res: Response) => {
         data: {
           purchasedGiftCardId: purchasedCard.id,
           redeemedById: merchantId,
-          amount: new Decimal(validatedData.amount),
+          amount: new Decimal(amount),
           balanceBefore,
           balanceAfter,
-          locationName: validatedData.locationName,
-          locationAddress: validatedData.locationAddress,
-          notes: validatedData.notes,
+          locationName: locationName,
+          locationAddress: locationAddress,
+          notes: notes,
         },
         include: {
           redeemedBy: {
@@ -502,13 +504,14 @@ export const redeemGiftCard = async (req: Request, res: Response) => {
       };
 
       await ActivityLogger.redemptionSuccess(
-      result.redemption.id,
-      purchasedCard.id,
-      validatedData.amount,
-      newBalance,
-      merchantId,
-      merchantId,
-      req
+        // result.redemption.id || "",
+        "",
+        purchasedCard.id,
+        amount,
+        newBalance,
+        merchantId,
+        merchantId,
+        req
     );
 
       // If balance is zero, mark as fully redeemed
@@ -539,7 +542,7 @@ export const redeemGiftCard = async (req: Request, res: Response) => {
     // Log verification success
     await ActivityLogger.verificationSuccess(
       purchasedCard.id,
-      validatedData.qrCode.substring(0, 8) + '...',
+      qrCode.substring(0, 8) + '...',
       merchantId,
       merchantId,
       req

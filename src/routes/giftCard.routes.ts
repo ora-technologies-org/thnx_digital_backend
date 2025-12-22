@@ -16,6 +16,8 @@ import {
   requireVerification,
   requireCompleteProfile,
 } from '../middleware/auth.middleware';
+import { validate } from '../middleware/validation.middleware';
+import { createGiftCardSchema, createSettingsSchema } from '../validators/giftCard.validator';
 
 const router = express.Router();
 
@@ -40,6 +42,7 @@ router.post(
   authenticate,
   authorize('MERCHANT'),
   requireVerification, // Only verified merchants can create
+  validate(createGiftCardSchema),
   createGiftCard
 );
 
@@ -96,7 +99,7 @@ router.delete(
 );
 
 
-router.post("/settings", authenticate, authorize("MERCHANT"), createSettings);
+router.post("/settings", authenticate, authorize("MERCHANT"), validate(createSettingsSchema), createSettings);
 router.get("/card/settings", authenticate, authorize("MERCHANT"), getCardSetting);
 router.put("/card/settings", authenticate, authorize("MERCHANT"), updateSettings);
 

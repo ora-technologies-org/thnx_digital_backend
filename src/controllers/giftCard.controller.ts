@@ -57,7 +57,7 @@ export const createGiftCard = async (req: Request, res: Response) => {
     }
 
     // Validate request body
-    const validatedData = createGiftCardSchema.parse(req.body);
+    const {title, description, price, expiryDate} = req.body;
 
     // Check gift card limit (only count active cards)
     const existingCardsCount = await prisma.giftCard.count({
@@ -77,10 +77,10 @@ export const createGiftCard = async (req: Request, res: Response) => {
     const giftCard = await prisma.giftCard.create({
       data: {
         merchantId,
-        title: validatedData.title,
-        description: validatedData.description,
-        price: new Decimal(validatedData.price),
-        expiryDate: new Date(validatedData.expiryDate),
+        title: title,
+        description: description,
+        price: new Decimal(price),
+        expiryDate: new Date(expiryDate),
         merchantLogo: merchant.businessLogo,
       },
       include: {
@@ -103,7 +103,7 @@ export const createGiftCard = async (req: Request, res: Response) => {
       giftCard.id,
       merchantId,
       giftCard.title,
-      validatedData.price,
+      price,
       req
     );
 
@@ -596,19 +596,7 @@ export const getActiveGiftCards = async (req: Request, res: Response) => {
 export const createSettings = async (req:Request, res: Response) => {
   try {
     const userId = req.authUser?.userId;
-    const parsedData = createSettingsSchema.safeParse(req.body);
-    if (!parsedData.success) {
-      const errors = parsedData.error.issues.map((issue) => ({
-        field: issue.path[0],
-        message: issue.message,
-      }));
-
-      return res.status(400).json({
-        success: false,
-        errors,
-      });
-    }
-    const { primaryColor, secondaryColor, gradientDirection, fontFamily } = parsedData.data
+    const { primaryColor, secondaryColor, gradientDirection, fontFamily } = req.body;
     const merchant = await prisma.merchantProfile.findUnique({
       where:{
         userId: userId

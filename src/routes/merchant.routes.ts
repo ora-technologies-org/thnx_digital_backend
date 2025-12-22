@@ -28,6 +28,9 @@ import {
 } from "../middleware/auth.middleware";
 import { uploadMerchantDocs } from "../utils/multer";
 import { updateProfile } from "../controllers/admin.controller";
+import { validate } from "../middleware/validation.middleware";
+import { adminCreateMerchantSchema } from "../validators/auth.validator";
+import { merchantVerifySchema } from "../validators/user.validator";
 
 const router = express.Router();
 
@@ -318,7 +321,7 @@ router.post(
  *       500:
  *         $ref: '#/components/responses/InternalServerError'
  */
-router.post("/", authenticate, authorize("ADMIN"), uploadMerchantDocs, adminCreateMerchant);
+router.post("/", authenticate, authorize("ADMIN"), uploadMerchantDocs, validate(adminCreateMerchantSchema), adminCreateMerchant);
 
 /**
  * @swagger
@@ -459,6 +462,7 @@ router.post(
   "/:merchantId/verify",
   authenticate,
   authorize("ADMIN"),
+  validate(merchantVerifySchema),
   verifyMerchant
 );
 

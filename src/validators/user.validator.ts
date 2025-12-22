@@ -9,4 +9,22 @@ export const createContactUsSchema = z.object({
             .max(10, "Phone number should be 10 characters long.")
 });
 
+export const merchantVerifySchema = z.object({
+    action: z.enum(["approve", "reject"], {
+      required_error: "Action is required",
+    }),
+
+    rejectionReason: z
+      .string()
+      .trim()
+      .optional(),
+
+    verificationNotes: z
+      .string()
+      .trim()
+      .min(5, "Verification notes must be at least 5 characters")
+      .optional(),
+  });
+
 export type createContactInput = z.infer<typeof createContactUsSchema>; 
+export type merchantVerifyInput = z.infer<typeof merchantVerifySchema>;
