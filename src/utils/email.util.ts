@@ -685,3 +685,83 @@ export const sendContactUsAdminNotification = async (
     throw error;
   }
 };
+
+
+export const sendOTPEmail = async (
+  to: string,
+  otp: string,
+) => {
+  if (!resend) {
+    console.log('Email not configured, skipping OTP email to:', to);
+    return;
+  }
+
+  try {
+    await resend.emails.send({
+      from: 'THNX Digital <noreply@thnxdigital.com>',
+      to,
+      subject: `Your OTP for Gift Card Redemption - ${otp}`,
+      html: `
+        <!DOCTYPE html>
+        <html>
+        <head>
+          <style>
+            body { font-family: Arial, sans-serif; line-height: 1.6; color: #333; }
+            .container { max-width: 600px; margin: 0 auto; padding: 20px; }
+            .header { background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; padding: 30px; text-align: center; border-radius: 10px 10px 0 0; }
+            .content { background: #f9f9f9; padding: 30px; border-radius: 0 0 10px 10px; }
+            .otp-box { background: white; border: 2px dashed #667eea; padding: 20px; text-align: center; margin: 20px 0; border-radius: 8px; }
+            .otp-code { font-size: 36px; font-weight: bold; color: #667eea; letter-spacing: 8px; margin: 10px 0; }
+            .info-box { background: #e3f2fd; border-left: 4px solid #2196f3; padding: 15px; margin: 20px 0; border-radius: 4px; }
+            .warning { background: #fff3cd; border-left: 4px solid #ffc107; padding: 15px; margin: 20px 0; border-radius: 4px; }
+            .footer { text-align: center; margin-top: 30px; color: #666; font-size: 14px; }
+          </style>
+        </head>
+        <body>
+          <div class="container">
+            <div class="header">
+              <h1 style="margin: 0;">🎁 Gift Card Redemption</h1>
+              <p style="margin: 10px 0 0 0;">THNX Digital</p>
+            </div>
+            
+            <div class="content">
+              <h2>Verify Your Gift Card Redemption</h2>
+              <p>Hello,</p>
+              <div class="otp-box">
+                <p style="margin: 0; font-size: 14px; color: #666;">Your One-Time Password (OTP)</p>
+                <div class="otp-code">${otp}</div>
+                <p style="margin: 0; font-size: 12px; color: #999;">Valid for 10 minutes</p>
+              </div>
+              
+              <div class="warning">
+                <strong>⚠️ Security Notice:</strong>
+                <ul style="margin: 10px 0 0 0; padding-left: 20px;">
+                  <li>Never share this OTP with anyone</li>
+                  <li>This OTP expires in 10 minutes</li>
+                  <li>If you didn't request this, please ignore this email</li>
+                </ul>
+              </div>
+              
+              <p><strong>How to use:</strong></p>
+              <ol>
+                <li>Enter this OTP in the redemption form</li>
+                <li>Complete the redemption process</li>
+                <li>Enjoy your gift card value!</li>
+              </ol>
+              
+              <div class="footer">
+                <p>If you didn't attempt to redeem a gift card, please contact us immediately at <a href="mailto:support@thnxdigital.com">support@thnxdigital.com</a></p>
+                <p style="margin-top: 20px; color: #999;">© 2024 THNX Digital. All rights reserved.</p>
+              </div>
+            </div>
+          </div>
+        </body>
+        </html>
+      `,
+    });
+
+    console.log('OTP email sent to:', to);
+  } catch (error) {
+    console.error('OTP email error:', error);
+  }
+};

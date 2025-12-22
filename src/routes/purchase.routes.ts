@@ -5,6 +5,7 @@ import {
   redeemGiftCard,
   getRedemptionHistory,
   getCustomerPurchases,
+  requestOtp,
 } from '../controllers/purchase.controller';
 import {
   authenticate,
@@ -67,5 +68,8 @@ router.get(
   requireVerification, // Only verified merchants can view history
   getRedemptionHistory
 );
+
+router.post("/otp/request-otp", authenticate, authorize("MERCHANT"), requestOtp);
+
 
 export default router;

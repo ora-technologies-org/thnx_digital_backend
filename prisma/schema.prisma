@@ -258,7 +258,7 @@ model GiftCardOtp{
 
   //otp
   otpToken            String
-  otpExpiry           String
+  otpExpiry           DateTime
   used                Boolean
   createdAt           DateTime @default(now())
   updateAt           DateTime @updatedAt

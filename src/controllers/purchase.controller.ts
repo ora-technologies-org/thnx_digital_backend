@@ -1,4 +1,4 @@
-import { Request, Response } from "express";
+import { NextFunction, Request, Response } from "express";
 import {
   purchaseGiftCardSchema,
   redeemGiftCardSchema,
@@ -11,6 +11,9 @@ import {
 } from "../utils/qrcode.util";
 import { ActivityLogger } from "../services/activityLog.service";
 import { EmailService } from "../services/email.service";
+import { otpGenerator } from "../helpers/otp/otpGenerator";
+import { clientCommandMessageReg } from "bullmq";
+import { sendOTPEmail, sendWelcomeEmail } from "../utils/email.util";
 
 // Define authenticated request interface
 interface AuthenticatedRequest extends Request {
@@ -767,3 +770,53 @@ export const getCustomerPurchases = async (req: Request, res: Response) => {
     });
   }
 };
+
+export const requestOtp = async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const { purchaseId } = req.body;
+    if (!purchaseId){
+      return res.status(400).json({
+        success: false,
+        message: "Purchased Id is required to request for otp",
+      });
+    }
+    const purchasedGiftCard = await prisma.purchasedGiftCard.findUnique({
+      where: {
+        id: String(purchaseId)
+      }
+    });
+    if (!purchasedGiftCard){
+      return res.status(404).json({
+        success: false,
+        message: "No purchase record found with the given id."
+      });
+    }
+    const otp = await otpGenerator(3);
+    const createOTP = await prisma.giftCardOtp.create({
+      data:{
+        purchasedGiftCardId: purchaseId,
+        otpToken: otp.otp,
+        otpExpiry: otp.otpExpiry,
+        used: false,
+      }
+    });
+    try {
+      const sendOTP = sendOTPEmail(purchasedGiftCard?.customerEmail!, otp.otp);
+    } catch (error) {
+      return res.status(400).json({
+        success: false,
+        message: "Error sending mail to requested email."
+      })
+    }
+    return res.status(200).json({
+      success: false,
+      message: "OTP has successfully been sent to your email."
+    });
+  } catch (error: any) {
+    return res.status(500).json({
+      success: false,
+      message: "Internal Server error",
+      error: error.message
+    })
+  }
+}
