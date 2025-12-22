@@ -14,6 +14,8 @@ import { EmailService } from "../services/email.service";
 import { otpGenerator } from "../helpers/otp/otpGenerator";
 import { clientCommandMessageReg } from "bullmq";
 import { sendOTPEmail, sendWelcomeEmail } from "../utils/email.util";
+import { StatusCodes } from "../utils/statusCodes";
+import { error, success } from "../utils/response";
 
 // Define authenticated request interface
 interface AuthenticatedRequest extends Request {
@@ -832,7 +834,8 @@ export const verifyOtp = async (req: Request, res: Response, next: NextFunction)
     }
     const findOtp = await prisma.giftCardOtp.findFirst({
       where:{
-        purchasedGiftCardId: purchaseId
+        purchasedGiftCardId: purchaseId,
+        otpToken: otp
       },
       orderBy:{
         createdAt: "desc"
@@ -859,10 +862,7 @@ export const verifyOtp = async (req: Request, res: Response, next: NextFunction)
       });
     }
     if (findOtp.otpExpiry < new Date()){
-      return res.status(400).json({
-        success: false,
-        message: "The provided otp has been expired."
-      });
+      return res.status(StatusCodes.BAD_REQUEST).json(error("The provided otp has been expired."));
     };
     const used = await prisma.giftCardOtp.update({
       where:{
@@ -871,10 +871,7 @@ export const verifyOtp = async (req: Request, res: Response, next: NextFunction)
         used: true
       }
     });
-    return res.status(200).json({
-      success: true,
-      message: "OTP has been verified successfully."
-    })
+    return res.status(StatusCodes.OK).json(success("OTP verified successfully"))
 
   } catch (error: any) {
     return res.status(500).json({
