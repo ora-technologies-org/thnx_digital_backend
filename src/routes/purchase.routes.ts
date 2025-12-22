@@ -6,6 +6,7 @@ import {
   getRedemptionHistory,
   getCustomerPurchases,
   requestOtp,
+  verifyOtp,
 } from '../controllers/purchase.controller';
 import {
   authenticate,
@@ -70,6 +71,6 @@ router.get(
 );
 
 router.post("/otp/request-otp", authenticate, authorize("MERCHANT"), requestOtp);
-
+router.post("/otp/verify-otp", authenticate, authorize("MERCHANT"), verifyOtp);
 
 export default router;

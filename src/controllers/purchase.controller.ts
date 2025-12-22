@@ -820,3 +820,67 @@ export const requestOtp = async (req: Request, res: Response, next: NextFunction
     })
   }
 }
+
+export const verifyOtp = async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const { purchaseId, otp } = req.body;
+    if (!purchaseId || !otp){
+      return res.status(400).json({
+        success: false,
+        message: "PurchaseId and OTP are required for verification."
+      });
+    }
+    const findOtp = await prisma.giftCardOtp.findFirst({
+      where:{
+        purchasedGiftCardId: purchaseId
+      },
+      orderBy:{
+        createdAt: "desc"
+      }
+    });
+    if (!findOtp){
+      return res.status(400).json({
+        success: false,
+        message: "OTP not found, please try requesting for otp once again."
+      })
+    };
+
+    if (findOtp.used === true){
+      return res.status(400).json({
+        success: false,
+        message: "The provided otp has already been used."
+      })
+    }
+
+    if (otp !== findOtp.otpToken){
+      return res.status(400).json({
+        success: false,
+        message: "The provided otp is invalid."
+      });
+    }
+    if (findOtp.otpExpiry < new Date()){
+      return res.status(400).json({
+        success: false,
+        message: "The provided otp has been expired."
+      });
+    };
+    const used = await prisma.giftCardOtp.update({
+      where:{
+        id: findOtp.id
+      },data:{
+        used: true
+      }
+    });
+    return res.status(200).json({
+      success: true,
+      message: "OTP has been verified successfully."
+    })
+
+  } catch (error: any) {
+    return res.status(500).json({
+      success: false,
+      message: "Internal Server error",
+      error: error.message
+    })
+  }
+}
