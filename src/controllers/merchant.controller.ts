@@ -1,23 +1,19 @@
 import { NextFunction, Request, Response } from "express";
 import prisma from "../utils/prisma.util";
 import {
-  adminCreateMerchantSchema,
   completeProfileSchema,
   merchantQuickRegisterSchema,
 } from "../validators/auth.validator";
 import { AuthenticatedRequest } from "./auth.controller";
 import bcrypt from "bcrypt";
 import { generateTokens } from "../utils/jwt.util";
-import PDFDocument, { clip, dash, file } from 'pdfkit';
+import PDFDocument from 'pdfkit';
 import { AnalyticsData } from "../interfaces/analyticsInterface";
 
 import { ActivityLogger } from "../services/activityLog.service";
 import { EmailService } from "../services/email.service";
-import { mode } from "crypto-js";
 import { StatusCodes } from "../utils/statusCodes";
-import { success } from "../utils/response";
-import { error } from "console";
-import { STATUS_CODES } from "http";
+import { successResponse, errorResponse } from "../utils/response";
 /**
  * @route   POST /api/auth/merchant/register
  * @desc    Quick merchant registration (Step 1 - Minimal info)
@@ -25,29 +21,14 @@ import { STATUS_CODES } from "http";
  */
 export const merchantRegister = async (req: Request, res: Response) => {
   try {
-    const validatedData = merchantQuickRegisterSchema.safeParse(req.body);
-    if (!validatedData.success) {
-        const errors = validatedData.error.issues.map((issue) => ({
-          field: issue.path[0],
-          message: issue.message,
-        }));
-
-        return res.status(400).json({
-          success: false,
-          errors,
-        });
-      }
-      const {email, password, name, phone,} = validatedData.data;
+    const {email, password, name, phone,} = req.body;
 
     const existingUser = await prisma.user.findUnique({
       where: { email: email },
     });
 
     if (existingUser) {
-      return res.status(400).json({
-        success: false,
-        message: "User with this email already exists",
-      });
+      return res.status(StatusCodes.BAD_REQUEST).json(errorResponse("User with this email already exists."));
     }
 
     const hashedPassword = await bcrypt.hash(password, 10);
@@ -108,11 +89,7 @@ export const merchantRegister = async (req: Request, res: Response) => {
       },
     });
 
-    return res.status(201).json({
-      success: true,
-      message:
-        "Registration successful! Please complete your profile to get verified.",
-      data: {
+    return res.status(StatusCodes.CREATED).json(successResponse("Registration successful! Please complete your profile to get verified.",{
         user: {
           id: user.id,
           email: user.email,
@@ -121,20 +98,20 @@ export const merchantRegister = async (req: Request, res: Response) => {
           profileStatus: "INCOMPLETE",
         },
         tokens,
-      },
-    });
+      }
+    ));
   } catch (error: any) {
     console.error("Merchant registration error:", error);
     
     if (error.name === "ZodError") {
-      return res.status(400).json({
+      return res.status(StatusCodes.BAD_REQUEST).json({
         success: false,
         message: "Validation error",
         errors: error.errors,
       });
     }
 
-    return res.status(500).json({
+    return res.status(StatusCodes.INTERNAL_SERVER_ERROR).json({
       success: false,
       message: "Internal server error",
       error: error.message,
@@ -154,17 +131,11 @@ export const completeProfile = async (req: Request, res: Response) => {
     const files = req.files as { [fieldname: string]: Express.Multer.File[] };
 
     if (!userId) {
-      return res.status(401).json({
-        success: false,
-        message: "Unauthorized",
-      });
+      return res.status(StatusCodes.UNAUTHORIZED).json(errorResponse("Unauthorized"));
     }
 
     if (authReq.authUser?.role !== "MERCHANT") {
-      return res.status(403).json({
-        success: false,
-        message: "Only merchants can complete profile",
-      });
+      return res.status(StatusCodes.FORBIDDEN).json(errorResponse("Only merchants can complete profile."));
     }
 
     const merchant = await prisma.merchantProfile.findUnique({
@@ -173,19 +144,13 @@ export const completeProfile = async (req: Request, res: Response) => {
       }
     }); 
     if (merchant?.profileStatus === "VERIFIED"){
-      return res.status(400).json({
-        success: false,
-        message: "Profile already verified."
-      })
+      return res.status(StatusCodes.BAD_REQUEST).json(errorResponse("Profile already verified."));
     }
 
     const validatedData = completeProfileSchema.parse(req.body);
 
     if (!files?.identityDocument) {
-      return res.status(400).json({
-        success: false,
-        message: "Identity document is required",
-      });
+      return res.status(StatusCodes.OK).json(errorResponse("Identity document is required."));
     }
 
     const documentData = {
@@ -260,27 +225,22 @@ export const completeProfile = async (req: Request, res: Response) => {
       profileStatus: "PENDING_VERIFICATION",
     });
 
-    return res.status(200).json({
-      success: true,
-      message:
-        "Profile submitted successfully! Waiting for admin verification.",
-      data: {
+    return res.status(StatusCodes.OK).json(successResponse("Profile submitted successfully! Waiting for admin verification.", {
         profile: updatedProfile,
         tokens,
-      },
-    });
+      }));
   } catch (error: any) {
     console.error("Complete profile error:", error);
 
     if (error.name === "ZodError") {
-      return res.status(400).json({
+      return res.status(StatusCodes.BAD_REQUEST).json({
         success: false,
         message: "Validation error",
         errors: error.errors,
       });
     }
 
-    return res.status(500).json({
+    return res.status(StatusCodes.INTERNAL_SERVER_ERROR).json({
       success: false,
       message: "Internal server error",
       error: error.message,
@@ -298,10 +258,7 @@ export const getMerchantProfile = async (req: Request, res: Response) => {
     const userId = req.authUser?.userId;
 
     if (!userId) {
-      return res.status(401).json({
-        success: false,
-        message: "Unauthorized",
-      });
+      return res.status(StatusCodes.UNAUTHORIZED).json(errorResponse("Unauthorized"));
     }
 
     // Get merchant profile with user details
@@ -333,10 +290,7 @@ export const getMerchantProfile = async (req: Request, res: Response) => {
     });
 
     if (!merchantProfile) {
-      return res.status(404).json({
-        success: false,
-        message: "Merchant profile not found",
-      });
+      return res.status(StatusCodes.NOT_FOUND).json(errorResponse("Merchant profile not found."));
     }
 
     // Determine completion percentage
@@ -365,9 +319,7 @@ export const getMerchantProfile = async (req: Request, res: Response) => {
       (field) => !merchantProfile[field as keyof typeof merchantProfile],
     );
 
-    return res.status(200).json({
-      success: true,
-      data: {
+    return res.status(StatusCodes.OK).json(successResponse("Merchant profile fetched successfully.",{
         profile: merchantProfile,
         stats: {
           completionPercentage,
@@ -377,11 +329,10 @@ export const getMerchantProfile = async (req: Request, res: Response) => {
           isVerified: merchantProfile.profileStatus === "VERIFIED",
           isRejected: merchantProfile.profileStatus === "REJECTED",
         },
-      },
-    });
+      }));
   } catch (error: any) {
     console.error("Get merchant profile error:", error);
-    return res.status(500).json({
+    return res.status(StatusCodes.INTERNAL_SERVER_ERROR).json({
       success: false,
       message: "Error fetching merchant profile",
       error: error.message,
@@ -400,10 +351,7 @@ export const resubmitProfile = async (req: Request, res: Response) => {
     const files = req.files as { [fieldname: string]: Express.Multer.File[] };
 
     if (!userId) {
-      return res.status(401).json({
-        success: false,
-        message: "Unauthorized",
-      });
+      return res.status(StatusCodes.UNAUTHORIZED).json(errorResponse("Unauthorized"));
     }
 
     // Get existing merchant profile
@@ -412,19 +360,14 @@ export const resubmitProfile = async (req: Request, res: Response) => {
     });
 
     if (!existingProfile) {
-      return res.status(404).json({
-        success: false,
-        message: "Merchant profile not found",
-      });
+      return res.status(StatusCodes.NOT_FOUND).json(errorResponse("Merchant profile not found"));
     }
 
     // Only allow resubmission if profile is rejected
     if (existingProfile.profileStatus !== "REJECTED") {
-      return res.status(400).json({
-        success: false,
-        message: `Cannot resubmit profile. Current status: ${existingProfile.profileStatus}`,
-        profileStatus: existingProfile.profileStatus,
-      });
+      return res.status(StatusCodes.BAD_REQUEST).json(errorResponse(`Cannot resubmit profile. Current status: ${existingProfile.profileStatus}`,{
+        profileStatus: existingProfile.profileStatus
+      }));
     }
 
     // Validate request body
@@ -445,10 +388,7 @@ export const resubmitProfile = async (req: Request, res: Response) => {
 
     // Ensure identity document is present
     if (!documentData.identityDocument) {
-      return res.status(400).json({
-        success: false,
-        message: "Identity document is required",
-      });
+      return res.status(StatusCodes.BAD_REQUEST).json(errorResponse("Identity document is required"));
     }
 
     // Update merchant profile
@@ -526,26 +466,21 @@ export const resubmitProfile = async (req: Request, res: Response) => {
 
 
 
-    return res.status(200).json({
-      success: true,
-      message:
-        "Profile resubmitted successfully! Waiting for admin verification.",
-      data: {
+    return res.status(StatusCodes.OK).json(successResponse("Profile resubmitted successfully! Waiting for admin verification.",{
         profile: updatedProfile,
-      },
-    });
+      }));
   } catch (error: any) {
     console.error("Resubmit profile error:", error);
 
     if (error.name === "ZodError") {
-      return res.status(400).json({
+      return res.status(StatusCodes.BAD_REQUEST).json({
         success: false,
         message: "Validation error",
         errors: error.errors,
       });
     }
 
-    return res.status(500).json({
+    return res.status(StatusCodes.INTERNAL_SERVER_ERROR).json({
       success: false,
       message: "Error resubmitting profile",
       error: error.message,
@@ -562,10 +497,7 @@ export const updateMerchantProfile = async (req: Request, res: Response) => {
   try {
     const userId = req.authUser?.userId;
     if (!userId) {
-      return res.status(401).json({
-        success: false,
-        message: "Unauthorized",
-      });
+      return res.status(StatusCodes.UNAUTHORIZED).json(errorResponse("Unauthorized"));
     }
 
     // Only allow updating these non-critical fields
@@ -581,10 +513,7 @@ export const updateMerchantProfile = async (req: Request, res: Response) => {
     );
 
     if (Object.keys(updates).length === 0) {
-      return res.status(400).json({
-        success: false,
-        message: "No valid fields to update",
-      });
+      return res.status(StatusCodes.BAD_REQUEST).json(errorResponse("No valid fields to update"));
     }
 
     // Update merchant profile
@@ -611,16 +540,12 @@ export const updateMerchantProfile = async (req: Request, res: Response) => {
       req
     );
 
-    return res.status(200).json({
-      success: true,
-      message: "Profile updated successfully",
-      data: {
+    return res.status(StatusCodes.OK).json(successResponse("Profile updated successfully",{
         profile: updatedProfile,
-      },
-    });
+      }))
   } catch (error: any) {
     console.error("Update profile error:", error);
-    return res.status(500).json({
+    return res.status(StatusCodes.INTERNAL_SERVER_ERROR).json({
       success: false,
       message: "Error updating profile",
       error: error.message,
@@ -645,10 +570,7 @@ export const adminCreateMerchant = async (req: Request, res: Response) => {
     });
 
     if (existingUser) {
-      return res.status(400).json({
-        success: false,
-        message: "User with this email already exists",
-      });
+      return res.status(StatusCodes.BAD_REQUEST).json(errorResponse("User with this email already exists."));
     }
 
     const existsRegistrationNumber = await prisma.merchantProfile.findFirst({
@@ -658,10 +580,7 @@ export const adminCreateMerchant = async (req: Request, res: Response) => {
     })
 
     if (existsRegistrationNumber){
-      return res.status(400).json({
-        success: false,
-        message: "Provided business registration number is already in use"
-      })
+      return res.status(StatusCodes.BAD_REQUEST).json(errorResponse("Provided business registration number is already in use."))
     }
 
     const documentData = {
@@ -751,7 +670,7 @@ export const adminCreateMerchant = async (req: Request, res: Response) => {
       businessName,
     );
 
-    return res.status(StatusCodes.CREATED).json(success("Merchant created and verified successfully",  {
+    return res.status(StatusCodes.CREATED).json(successResponse("Merchant created and verified successfully",  {
         user: {
           id: result.user.id,
           email: result.user.email,
@@ -763,14 +682,14 @@ export const adminCreateMerchant = async (req: Request, res: Response) => {
     console.error("Admin create merchant error:", error);
 
     if (error.name === "ZodError") {
-      return res.status(400).json({
+      return res.status(StatusCodes.BAD_REQUEST).json({
         success: false,
         message: "Validation error",
         errors: error.errors,
       });
     }
 
-    return res.status(500).json({
+    return res.status(StatusCodes.INTERNAL_SERVER_ERROR).json({
       success: false,
       message: "Internal server error",
       error: error.message,
@@ -802,7 +721,7 @@ export const adminUpdateMerchant = async (req: Request, res: Response, next: Nex
     const invalidFields = sentFields.filter((field) => !allowedFileds.includes(field));
     
     if (invalidFields.length > 0){
-      return res.status(StatusCodes.BAD_REQUEST).json(error(`You cannot update the following fields: ${invalidFields.join(" ,")}`))
+      return res.status(StatusCodes.BAD_REQUEST).json(errorResponse(`You cannot update the following fields: ${invalidFields.join(" ,")}`))
     }
 
     for (const field of allowedFileds){
@@ -852,11 +771,11 @@ export const adminUpdateMerchant = async (req: Request, res: Response, next: Nex
         data: updateData
       })
       if (!updateMerchant){
-        return res.status(StatusCodes.BAD_REQUEST).json(error("Your profile couldn't be updated."));
+        return res.status(StatusCodes.BAD_REQUEST).json(errorResponse("Your profile couldn't be updated."));
       }
-      return res.status(StatusCodes.OK).json(success("Profile updated successfully.", updateMerchant))
+      return res.status(StatusCodes.OK).json(successResponse("Profile updated successfully.", updateMerchant))
     }else{
-      return res.status(StatusCodes.BAD_REQUEST).json(error("This merchant profile cannot be updated at its current status."))
+      return res.status(StatusCodes.BAD_REQUEST).json(errorResponse("This merchant profile cannot be updated at its current status."))
     }
 
   } catch (error: any) {
@@ -915,13 +834,13 @@ export const getPendingMerchants = async (req: Request, res: Response) => {
       },
     });
 
-    return res.status(StatusCodes.OK).json(success("Pending merchants fetched successfully",{
+    return res.status(StatusCodes.OK).json(successResponse("Pending merchants fetched successfully",{
         merchants: pendingMerchants,
         count: pendingMerchants.length,
       }));
   } catch (error: any) {
     console.error("Get pending merchants error:", error);
-    return res.status(500).json({
+    return res.status(StatusCodes.INTERNAL_SERVER_ERROR).json({
       success: false,
       message: "Error fetching pending merchants",
       error: error.message,
@@ -942,11 +861,11 @@ export const verifyMerchant = async (req: Request, res: Response) => {
     const adminId = authReq.authUser?.userId;
 
     if (action === "approve" && !verificationNotes){
-      return res.status(StatusCodes.BAD_REQUEST).json(error("Verification note is required."));
+      return res.status(StatusCodes.BAD_REQUEST).json(errorResponse("Verification note is required."));
     }
 
     if (action === "reject" && !rejectionReason) {
-      return res.status(StatusCodes.BAD_REQUEST).json(error("Rejection reason is required."));
+      return res.status(StatusCodes.BAD_REQUEST).json(errorResponse("Rejection reason is required."));
     }
 
     const merchantProfile = await prisma.merchantProfile.findUnique({
@@ -957,11 +876,11 @@ export const verifyMerchant = async (req: Request, res: Response) => {
     });
 
     if (!merchantProfile) {
-      return res.status(StatusCodes.NOT_FOUND).json(error("Merchant profile not found."));
+      return res.status(StatusCodes.NOT_FOUND).json(errorResponse("Merchant profile not found."));
     }
 
     if (merchantProfile.profileStatus === "VERIFIED") {
-      return res.status(StatusCodes.BAD_REQUEST).json(error("Merchant is already verified."));
+      return res.status(StatusCodes.BAD_REQUEST).json(errorResponse("Merchant is already verified."));
     }
 
     const updatedProfile = await prisma.merchantProfile.update({
@@ -1013,10 +932,10 @@ export const verifyMerchant = async (req: Request, res: Response) => {
       );
     }
 
-    return res.status(StatusCodes.OK).json(success(`Merchant ${action === "approve" ? "approved" : "rejected"} successfully`, {profile: updatedProfile}));
+    return res.status(StatusCodes.OK).json(successResponse(`Merchant ${action === "approve" ? "approved" : "rejected"} successfully`, {profile: updatedProfile}));
   } catch (error: any) {
     console.error("Verify merchant error:", error);
-    return res.status(500).json({
+    return res.status(StatusCodes.INTERNAL_SERVER_ERROR).json({
       success: false,
       message: "Error verifying merchant",
       error: error.message,
@@ -1103,14 +1022,14 @@ export const getAllMerchants = async (req: Request, res: Response) => {
       counts[item.profileStatus] = item._count.profileStatus;
     });
 
-    return res.status(StatusCodes.OK).json(success("Merchants fetched successfully.", {
+    return res.status(StatusCodes.OK).json(successResponse("Merchants fetched successfully.", {
         count: merchants.length,
         statusCounts: counts,
         merchants,
       }));
   } catch (error: any) {
     console.error("Get all merchants error:", error);
-    return res.status(500).json({
+    return res.status(StatusCodes.INTERNAL_SERVER_ERROR).json({
       success: false,
       message: "Error fetching merchants",
       error: error.message,
@@ -1147,16 +1066,13 @@ export const getMerchantById = async (req: Request, res: Response) => {
     });
     // const {password, ...merchantData} = merchant?.user
     if (!merchant){
-      return res.status(404).json({
-        success: false,
-        message: "Merchant not found with the given id."
-      })
+      return res.status(StatusCodes.NOT_FOUND).json(errorResponse("Merchant not found with the given id."));
     }
-    return res.status(StatusCodes.OK).json(success("Merchant fetched successfully", merchant));
+    return res.status(StatusCodes.OK).json(successResponse("Merchant fetched successfully", merchant));
 
   } catch (error: any) {
     console.error("Get all merchants error:", error);
-    return res.status(500).json({
+    return res.status(StatusCodes.INTERNAL_SERVER_ERROR).json({
       success: false,
       message: "Error fetching merchants",
       error: error.message,
@@ -1185,7 +1101,7 @@ export const deleteMerchant = async (req: Request, res: Response, next: NextFunc
     });
 
     if (!merchantProfile) {
-      return res.status(StatusCodes.NOT_FOUND).json(error("Merchant not found"));
+      return res.status(StatusCodes.NOT_FOUND).json(errorResponse("Merchant not found"));
     }
 
     if (hardDelete) {
@@ -1225,7 +1141,7 @@ export const deleteMerchant = async (req: Request, res: Response, next: NextFunc
         req
       });
 
-      return res.status(StatusCodes.OK).json("Merchant permanently deleted.");
+      return res.status(StatusCodes.OK).json(successResponse("Merchant permanently deleted."));
     } else {
       // Soft delete - deactivate the user
       await prisma.user.update({
@@ -1241,14 +1157,14 @@ export const deleteMerchant = async (req: Request, res: Response, next: NextFunc
       await ActivityLogger.userDeactivated(merchantId, adminId!, req);
 
 
-      return res.status(StatusCodes.OK).json(success("Merchant deactivated successfully.", 
+      return res.status(StatusCodes.OK).json(successResponse("Merchant deactivated successfully.", 
         {
           merchantId,
           email: merchantProfile.user.email}))
         }
   } catch (error: any) {
     console.error("Delete merchant error:", error);
-    return res.status(500).json({
+    return res.status(StatusCodes.INTERNAL_SERVER_ERROR).json({
       success: false,
       message: "Error deleting merchant",
       error: error.message,
@@ -1277,7 +1193,7 @@ export const updateMerchantData = async (req: Request, res: Response, next: Next
     const invalidFields = sentFields.filter((field) => !allowedFileds.includes(field));
     
     if (invalidFields.length > 0){
-      return res.status(400).json({
+      return res.status(StatusCodes.BAD_REQUEST).json({
         success: false,
         message: `You cannot update the following fields: ${invalidFields.join(" ,")}`
       })
@@ -1296,7 +1212,7 @@ export const updateMerchantData = async (req: Request, res: Response, next: Next
     // })
 
     // if (existsRegistrationNumber){
-    //   return res.status(400).json({
+    //   return res.status(StatusCodes.BAD_REQUEST).json({
     //     success: false,
     //     message: "Provided business registration number is already in use"
     //   })
@@ -1308,7 +1224,7 @@ export const updateMerchantData = async (req: Request, res: Response, next: Next
       }
     });
     if (merchant?.profileStatus === "VERIFIED"){
-      return res.status(400).json({
+      return res.status(StatusCodes.BAD_REQUEST).json({
         success: false,
         message: "Profile verified. Therefore, couldn't be updated."
       });
@@ -1344,12 +1260,12 @@ export const updateMerchantData = async (req: Request, res: Response, next: Next
       data: updateData
     })
     if (!updateMerchant){
-      return res.status(400).json({
+      return res.status(StatusCodes.BAD_REQUEST).json({
         success: true,
         message: "Your profile couldn't be updated"
       });
     }
-    return res.status(StatusCodes.OK).json(success("Profile updated successfully", updateMerchant))
+    return res.status(StatusCodes.OK).json(successResponse("Profile updated successfully", updateMerchant))
 
   } catch (error: any) {
       next(error);
@@ -1365,14 +1281,32 @@ export const getGiftCardByMerchant = async (req: Request, res: Response, next: N
         merchantId: merchantId
       }
     });
+
     if (!giftCards){
-      return res.status(StatusCodes.NOT_FOUND).json(error("No gift cards have been issued by this merchant yet."))
+      return res.status(StatusCodes.NOT_FOUND).json(errorResponse("No gift cards have been issued by this merchant yet."))
     }
-    return res.status(StatusCodes.OK).json(success("Gift cards fetched successfully.", giftCards));
+
+    const merchant=  await prisma.merchantProfile.findFirst({
+      where:{
+        id: merchantId
+      }
+    });
+
+    const setting = await prisma.settings.findFirst({
+      where:{
+        merchantId: merchant?.userId
+      }
+    });
+    
+    if (!setting){
+      return res.status(StatusCodes.NOT_FOUND).json(errorResponse("Settings has not been implemented by merchant."))
+    }
+
+    return res.status(StatusCodes.OK).json(errorResponse("Gift cards fetched successfully.", { giftCards, setting}));
 
     
   } catch (error: any) {
-    return res.status(500).json({
+    return res.status(StatusCodes.INTERNAL_SERVER_ERROR).json({
       success: false,
       message: "Error fetching gift cards",
       error: error.message
@@ -1388,11 +1322,11 @@ export const getVerifiedMerchants = async (req: Request, res: Response, next: Ne
       }
     });
     if (!merchant){
-      return res.status(StatusCodes.NOT_FOUND).json(error("Merchants not found"));
+      return res.status(StatusCodes.NOT_FOUND).json(errorResponse("Merchants not found"));
     }
-    return res.status(StatusCodes.OK).json(success("Merchants fetched successfully", merchant));
+    return res.status(StatusCodes.OK).json(successResponse("Merchants fetched successfully", merchant));
   } catch (error: any) {
-    return res.status(500).json({
+    return res.status(StatusCodes.INTERNAL_SERVER_ERROR).json({
       success: false,
       message: "Error fetching verified merchants",
       error: error.message
@@ -1521,10 +1455,10 @@ export const getOverallAnalytics = async (
       cardUtilization,
     };
 
-    return res.status(StatusCodes.OK).json(success("Analytics fetched successfully", analyticsData));
+    return res.status(StatusCodes.OK).json(successResponse("Analytics fetched successfully", analyticsData));
   } catch (error: any) {
     console.error('Analytics Error:', error);
-    return res.status(500).json({
+    return res.status(StatusCodes.INTERNAL_SERVER_ERROR).json({
       success: false,
       message: 'Error fetching analytics',
       error: error.message,
@@ -1631,7 +1565,7 @@ export const generateAnalyticsPDF = async (
     doc.end();
   } catch (error: any) {
     console.error('PDF Generation Error:', error);
-    return res.status(500).json({
+    return res.status(StatusCodes.INTERNAL_SERVER_ERROR).json({
       success: false,
       message: 'Error generating PDF',
       error: error.message,
@@ -1834,7 +1768,7 @@ function addFooter(doc: PDFKit.PDFDocument) {
       'This report is confidential and intended for internal use only.',
       50,
       doc.page.height - bottomMargin,
-      { align: 'center', width: 500 }
+      { align: 'center', width: StatusCodes.INTERNAL_SERVER_ERROR }
     );
 }
 
@@ -1842,7 +1776,7 @@ export const createSupportTicket = async (req: Request, res: Response, next: Nex
   try {
     const { query, title } = req.body;
     if (!query || !title){
-      return res.status(StatusCodes.BAD_REQUEST).json(error("Query and title are required to create a support ticket."));
+      return res.status(StatusCodes.BAD_REQUEST).json(errorResponse("Query and title are required to create a support ticket."));
     }
     const userId = req.authUser?.userId;
     const merchant = await prisma.merchantProfile.findUnique({
@@ -1851,7 +1785,7 @@ export const createSupportTicket = async (req: Request, res: Response, next: Nex
       }
     });
     if (!merchant){
-      return res.status(StatusCodes.NOT_FOUND).json(error("Merchant not found with given id."));
+      return res.status(StatusCodes.NOT_FOUND).json(errorResponse("Merchant not found with given id."));
     }
     const createTicket = await prisma.supportTicket.create({
       data:{
@@ -1861,12 +1795,12 @@ export const createSupportTicket = async (req: Request, res: Response, next: Nex
       }
     });
     if (!createTicket){
-      return res.status(StatusCodes.BAD_REQUEST).json(error("Failed creating a support ticket"));
+      return res.status(StatusCodes.BAD_REQUEST).json(errorResponse("Failed creating a support ticket"));
     }
-    return res.status(StatusCodes.OK).json(success("Support ticket created succesfully.", createTicket));
+    return res.status(StatusCodes.OK).json(successResponse("Support ticket created succesfully.", createTicket));
 
   } catch (error: any) {
-    return res.status(500).json({
+    return res.status(StatusCodes.INTERNAL_SERVER_ERROR).json({
       success: false,
       message: "Error creating support ticket.",
       error: error.message
@@ -1917,12 +1851,12 @@ export const getAllSupportTickets = async (req:Request, res: Response, next: Nex
       }
     });
     if (!supportTickets){
-      return res.status(StatusCodes.BAD_REQUEST).json(error("Couldn't fetch support tickets."));
+      return res.status(StatusCodes.BAD_REQUEST).json(errorResponse("Couldn't fetch support tickets."));
     }
-    return res.status(200).json(success("Fetched support tickets successfully.", {count: supportTickets.length,
+    return res.status(StatusCodes.OK).json(successResponse("Fetched support tickets successfully.", {count: supportTickets.length,
       data: supportTickets}));
   } catch (error: any) {
-    return res.status(500).json({
+    return res.status(StatusCodes.INTERNAL_SERVER_ERROR).json({
       success: false,
       message: "Error fetching support tickets",
       error: error.message
@@ -1939,12 +1873,12 @@ export const getSupportTicketById = async (req: Request, res: Response, next: Ne
       }
     });
     if (!ticketId){
-      return res.status(StatusCodes.NOT_FOUND).json(error("No support ticket found with given id."))
+      return res.status(StatusCodes.NOT_FOUND).json(errorResponse("No support ticket found with given id."))
     }
-    return res.status(StatusCodes.OK).json(success("Support ticket fetched successfully", supportTicket));
+    return res.status(StatusCodes.OK).json(successResponse("Support ticket fetched successfully", supportTicket));
 
   } catch (error: any) {
-    return res.status(500).json({
+    return res.status(StatusCodes.INTERNAL_SERVER_ERROR).json({
       success: false,
       message: "Error fetching support ticket",
       error: error.message
@@ -1957,11 +1891,11 @@ export const updateSupportTicket = async (req: Request, res: Response, next: Nex
     const { ticketId } = req.params;
     const { response, status } = req.body;
     if (!response && !status){
-      return res.status(StatusCodes.BAD_REQUEST).json(error("Response and status are required to update the ticket."))
+      return res.status(StatusCodes.BAD_REQUEST).json(errorResponse("Response and status are required to update the ticket."))
     }
 
     if (status !== "CLOSE" && status !== "IN_PROGRESS"){
-      return res.status(StatusCodes.BAD_REQUEST).json(error("Status can either be CLOSE or IN_PROGRESS"));
+      return res.status(StatusCodes.BAD_REQUEST).json(errorResponse("Status can either be CLOSE or IN_PROGRESS"));
     }
     
     const supportTicket = await prisma.supportTicket.findFirst({
@@ -1970,7 +1904,7 @@ export const updateSupportTicket = async (req: Request, res: Response, next: Nex
       }
     });
     if (!supportTicket){
-      return res.status(StatusCodes.NOT_FOUND).json(error("Support ticket not found!"))
+      return res.status(StatusCodes.NOT_FOUND).json(errorResponse("Support ticket not found!"))
     }
     const updateSupportTicket = await prisma.supportTicket.update({
       where:{
@@ -1982,9 +1916,9 @@ export const updateSupportTicket = async (req: Request, res: Response, next: Nex
       }
     })
     if (!updateSupportTicket){
-      return res.status(StatusCodes.BAD_REQUEST).json(error("Support Ticket couldn't be updated."));
+      return res.status(StatusCodes.BAD_REQUEST).json(errorResponse("Support Ticket couldn't be updated."));
     }
-    return res.status(StatusCodes.OK).json(success("Support Ticket updated successfully", updateSupportTicket));
+    return res.status(StatusCodes.OK).json(successResponse("Support Ticket updated successfully", updateSupportTicket));
   } catch (error: any) {
       return res.status(StatusCodes.INTERNAL_SERVER_ERROR).json(error("Internal Server error", error.message));
   }
@@ -2001,7 +1935,7 @@ export const getPurchaseOrders = async (req: Request, res: Response, next: NextF
       }
     });
     if (!merchant){
-      return res.status(StatusCodes.BAD_REQUEST).json(error("Merchant not found with given id"));
+      return res.status(StatusCodes.BAD_REQUEST).json(errorResponse("Merchant not found with given id"));
     }
 
     const orders = await prisma.purchasedGiftCard.findMany({
@@ -2030,7 +1964,7 @@ export const getPurchaseOrders = async (req: Request, res: Response, next: NextF
         purchasedAt: order === "asc" ? "asc" : "desc"
       }
     });
-    return res.status(StatusCodes.OK).json(success("Purchased orders fetched successfully.", orders));
+    return res.status(StatusCodes.OK).json(successResponse("Purchased orders fetched successfully.", orders));
 
   } catch (error: any) {
       return res.status(StatusCodes.INTERNAL_SERVER_ERROR).json(error("Internal Server error", error.message));

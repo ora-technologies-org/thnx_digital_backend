@@ -4,7 +4,7 @@ type ApiResponse<T = unknown> = {
   data?: T;
 };
 
-export const success = <T>(
+export const successResponse = <T>(
   message: string,
   data?: T
 ): ApiResponse<T> => {
@@ -15,11 +15,13 @@ export const success = <T>(
   };
 };
 
-export const error = (
+export const errorResponse = <T> (
   message: string,
+  data?: T
 ): ApiResponse => {
   return {
     success: false,
     message,
+    data
   };
 };

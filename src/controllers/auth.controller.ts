@@ -5,9 +5,10 @@ import { changePasswordSchema, loginSchema, resetPasswordSchema } from "../valid
 import { generateTokens, verifyRefreshToken } from "../utils/jwt.util";
 import { sendForgotPasswordOTP, sendPasswordResetSuccessEmail } from "../utils/email.util";
 import { otpGenerator } from "../helpers/otp/otpGenerator";
-import { ClientAuthentication, OAuth2Client } from "google-auth-library";
-import { use } from "passport";
+import { OAuth2Client } from "google-auth-library";
 import { ActivityLogger } from "../services/activityLog.service";
+import { StatusCodes } from "../utils/statusCodes";
+import { successResponse, errorResponse } from "../utils/response";
 
 const prisma = new PrismaClient();
 const googleVerification = new OAuth2Client(process.env.GOOGLE_CLIENT_ID);
@@ -48,19 +49,13 @@ export const login = async (req: Request, res: Response) => {
 
       await ActivityLogger.loginFailed(email, 'User not found', req);
 
-      return res.status(401).json({
-        success: false,
-        message: "Invalid email or password",
-      });
+      return res.status(StatusCodes.UNAUTHORIZED).json(errorResponse("Invalid email or password"));
     }
 
     if (!user.isActive) {
       await ActivityLogger.loginFailed(email, 'Account deactivated', req);
 
-      return res.status(403).json({
-        success: false,
-        message: "Your account has been deactivated. Contact support.",
-      });
+      return res.status(StatusCodes.FORBIDDEN).json(errorResponse("Your account has been deactivated. Contact support."));
     }
 
     if (user.password) {
@@ -71,17 +66,11 @@ export const login = async (req: Request, res: Response) => {
 
       if (!isPasswordValid) {
         await ActivityLogger.loginFailed(email, 'Invalid password', req);
-        return res.status(401).json({
-          success: false,
-          message: "Invalid email or password",
-        });
+        return res.status(StatusCodes.UNAUTHORIZED).json(errorResponse("Invalid email or password"));
       }
     } else {
       await ActivityLogger.loginFailed(email, 'OAuth account attempted password login', req);
-      return res.status(400).json({
-        success: false,
-        message: "This account uses OAuth. Please login with Google.",
-      });
+      return res.status(StatusCodes.BAD_REQUEST).json(errorResponse("This account uses OAuth. Please login with Google."));
     }
 
     const profileStatus = user.merchantProfile?.profileStatus || undefined;
@@ -113,10 +102,7 @@ export const login = async (req: Request, res: Response) => {
     await ActivityLogger.login(user.id, user.role, req);
 
 
-    return res.status(200).json({
-      success: true,
-      message: "Login successful",
-      data: {
+    return res.status(StatusCodes.OK).json(successResponse("Login successfully.", {
         user: {
           id: user.id,
           email: user.email,
@@ -127,20 +113,19 @@ export const login = async (req: Request, res: Response) => {
           isFirstTime: user.isFirstTime
         },
         tokens,
-      },
-    });
+      }));
   } catch (error: any) {
     console.error("Login error:", error);
 
     if (error.name === "ZodError") {
-      return res.status(400).json({
+      return res.status(StatusCodes.BAD_REQUEST).json({
         success: false,
         message: "Validation error",
         errors: error.errors,
       });
     }
 
-    return res.status(500).json({
+    return res.status(StatusCodes.INTERNAL_SERVER_ERROR).json({
       success: false,
       message: "Internal server error",
       error: error.message,
@@ -154,10 +139,7 @@ export const googleLogin = async (req: Request, res: Response) => {
     const { credential } = req.body;
 
     if (!credential) {
-      return res.status(400).json({
-        success: false,
-        message: "Google credential is required",
-      });
+      return res.status(StatusCodes.BAD_REQUEST).json(errorResponse("Google credential is required"));
     }
 
     const ticket = await googleVerification.verifyIdToken({
@@ -168,7 +150,7 @@ export const googleLogin = async (req: Request, res: Response) => {
     const payload = ticket.getPayload();
 
     if (!payload || !payload.email) {
-      return res.status(400).json({
+      return res.status(StatusCodes.BAD_REQUEST).json({
         success: false,
         message: "Invalid Google token",
       });
@@ -232,10 +214,7 @@ export const googleLogin = async (req: Request, res: Response) => {
       },
     });
 
-    return res.status(200).json({
-      success: true,
-      message: "Google login successful",
-      data: {
+    return res.status(StatusCodes.OK).json(successResponse("Google login successful", {
         user: {
           id: user.id,
           email: user.email,
@@ -245,11 +224,10 @@ export const googleLogin = async (req: Request, res: Response) => {
           isVerified: user.merchantProfile?.isVerified || false,
         },
         tokens,
-      },
-    });
+      }));
   } catch (error: any) {
     console.error("Google login error:", error);
-    return res.status(500).json({
+    return res.status(StatusCodes.INTERNAL_SERVER_ERROR).json({
       success: false,
       message: "Google signup/login failed",
       error: error.message,
@@ -268,10 +246,7 @@ export const refreshToken = async (req: Request, res: Response) => {
     const { refreshToken } = req.body;
 
     if (!refreshToken) {
-      return res.status(400).json({
-        success: false,
-        message: "Refresh token is required",
-      });
+      return res.status(StatusCodes.BAD_REQUEST).json(errorResponse("Refresh token is required."));
     }
 
     const decoded = verifyRefreshToken(refreshToken);
@@ -293,10 +268,7 @@ export const refreshToken = async (req: Request, res: Response) => {
     });
 
     if (!storedToken) {
-      return res.status(401).json({
-        success: false,
-        message: "Invalid refresh token",
-      });
+      return res.status(StatusCodes.UNAUTHORIZED).json(errorResponse("Invalid refresh token"));
     }
 
     if (new Date() > storedToken.expiresAt) {
@@ -304,10 +276,7 @@ export const refreshToken = async (req: Request, res: Response) => {
         where: { id: storedToken.id },
       });
 
-      return res.status(401).json({
-        success: false,
-        message: "Refresh token expired",
-      });
+      return res.status(StatusCodes.UNAUTHORIZED).json(errorResponse("Refresh token expired"));
     }
 
     const tokens = generateTokens({
@@ -333,16 +302,10 @@ export const refreshToken = async (req: Request, res: Response) => {
       },
     });
 
-    return res.status(200).json({
-      success: true,
-      message: "Token refreshed successfully",
-      data: {
-        tokens,
-      },
-    });
+    return res.status(StatusCodes.OK).json(successResponse("Token refreshed successfully", tokens ));
   } catch (error: any) {
     console.error("Refresh token error:", error);
-    return res.status(401).json({
+    return res.status(StatusCodes.UNAUTHORIZED).json({
       success: false,
       message: "Invalid or expired refresh token",
       error: error.message,
@@ -360,10 +323,7 @@ export const logout = async (req: Request, res: Response) => {
     const { refreshToken } = req.body;
 
     if (!refreshToken) {
-      return res.status(400).json({
-        success: false,
-        message: "Refresh token is required",
-      });
+      return res.status(StatusCodes.BAD_REQUEST).json(errorResponse("Refresh token is requiredd"));
     }
 
     const tokenRecord = await prisma.refreshToken.findUnique({
@@ -381,13 +341,10 @@ export const logout = async (req: Request, res: Response) => {
     }
 
 
-    return res.status(200).json({
-      success: true,
-      message: "Logout successful",
-    });
+    return res.status(StatusCodes.OK).json(successResponse("Logout successful"));
   } catch (error: any) {
     console.error("Logout error:", error);
-    return res.status(500).json({
+    return res.status(StatusCodes.INTERNAL_SERVER_ERROR).json({
       success: false,
       message: "Error during logout",
       error: error.message,
@@ -406,10 +363,7 @@ export const getCurrentUser = async (req: Request, res: Response) => {
     const userId = authReq.authUser?.userId;
 
     if (!userId) {
-      return res.status(401).json({
-        success: false,
-        message: "Unauthorized",
-      });
+      return res.status(StatusCodes.UNAUTHORIZED).json(errorResponse("Unauthorized"));
     }
 
     const user = await prisma.user.findUnique({
@@ -449,19 +403,13 @@ export const getCurrentUser = async (req: Request, res: Response) => {
     });
 
     if (!user) {
-      return res.status(404).json({
-        success: false,
-        message: "User not found",
-      });
+      return res.status(StatusCodes.NOT_FOUND).json(errorResponse("User not found."));
     }
 
-    return res.status(200).json({
-      success: true,
-      data: { user },
-    });
+    return res.status(StatusCodes.OK).json(successResponse("User fetched successfully.", user));
   } catch (error: any) {
     console.error("Get current user error:", error);
-    return res.status(500).json({
+    return res.status(StatusCodes.INTERNAL_SERVER_ERROR).json({
       success: false,
       message: "Error fetching user data",
       error: error.message,
@@ -473,10 +421,7 @@ export const getOtp = async(req: Request, res: Response) => {
   try {
     const email = req.body.email;
     if (!email){
-      return res.status(400).json({
-        success: false,
-        message: "Email is required to change the password",
-      })
+      return res.status(StatusCodes.BAD_REQUEST).json(errorResponse("Email is required to change the password"));
     }
     const user = await prisma.user.findUnique({
       where: {
@@ -484,10 +429,7 @@ export const getOtp = async(req: Request, res: Response) => {
       }
     });
     if (!user){
-      return res.status(404).json({
-        success: false,
-        message: "No user found"
-      });
+      return res.status(StatusCodes.NOT_FOUND).json(errorResponse("No user found with the given email."));
     }
     const userOtp = await otpGenerator(3);
     try {
@@ -497,8 +439,7 @@ export const getOtp = async(req: Request, res: Response) => {
         userOtp.otp
       )
     } catch (error) {
-      console.log(error)
-      return res.status(500).json({
+      return res.status(StatusCodes.INTERNAL_SERVER_ERROR).json({
         success: false,
         message: "The mail couldn't be sent."
       })
@@ -512,18 +453,12 @@ export const getOtp = async(req: Request, res: Response) => {
       }
     })
     if (!seedOtp){
-      return res.status(400).json({
-        success: false,
-        message: "Failed to create otp. Please try again."
-      })
+      return res.status(StatusCodes.BAD_REQUEST).json(errorResponse("Failed to create otp. Please try again."));
     }
-    return res.status(200).json({
-      success: true,
-      message: "Forgot Password OTP has been sent to your email."
-    })
+    return res.status(StatusCodes.OK).json(successResponse("Forgot Password OTP has been sent to your email."));
 
   } catch (error: any) {
-    return res.status(500).json({
+    return res.status(StatusCodes.INTERNAL_SERVER_ERROR).json({
       success: false,
       message: "Error fetching user data",
       error: error.message,
@@ -535,10 +470,7 @@ export const verifyOtp = async (req: Request, res: Response) => {
   try {
     const { email, otp } = req.body;
     if (!email && !otp){
-      return res.status(400).json({
-        success: false,
-        message: "Email and otp are required to verify the password."
-      })
+      return res.status(StatusCodes.BAD_REQUEST).json(errorResponse("Email and otp are required to verify the password."));
     }
     const user = await prisma.user.findUnique({
       where: {
@@ -547,10 +479,7 @@ export const verifyOtp = async (req: Request, res: Response) => {
     });
 
     if (!user){
-      return res.status(404).json({
-        success: false,
-        message: "User not found with provieded email"
-      });
+      return res.status(StatusCodes.NOT_FOUND).json(errorResponse("User not found with provieded email."));
     }
 
     const userOtp = await prisma.changePassword.findFirst({
@@ -561,29 +490,18 @@ export const verifyOtp = async (req: Request, res: Response) => {
       }
     })
     if (!userOtp){
-      return res.status(404).json({
-        success: false,
-        message: "OTP not found, please try requesting for otp once again."
-      })
+      return res.status(StatusCodes.NOT_FOUND).json(errorResponse("OTP not found, please try requesting for otp once again."))
     }
     if (userOtp?.otpToken !== otp){
-      return res.status(400).json({
-        success: false, 
-        message: "The provided otp is invalid."
-      });
+      return res.status(StatusCodes.BAD_REQUEST).json(errorResponse("The provided otp is invalid."));
     }
     if (userOtp?.otpExpiry! < new Date() ){
-      return res.status(400).json({
-        success: false,
-        message: "The provided otp has been expired."
-      })
+      return res.status(StatusCodes.BAD_REQUEST).json(errorResponse("The provided otp has been expired."))
     }
-    return res.status(200).json({
-      success: true,
-      message: "OTP has been verified successfully."
-    })
+    return res.status(StatusCodes.OK).json(successResponse("OTP has been verified successfully."));
+
   } catch (error: any) {
-    return res.status(500).json({
+    return res.status(StatusCodes.INTERNAL_SERVER_ERROR).json({
       success: false,
       message: "Error verifying otp",
       error: error.message
@@ -598,10 +516,7 @@ export const changePassword =  async (req: Request, res: Response) => {
     const {email, password, otp, confirmPassword} = req.body;
     
     if (!email || !password || !confirmPassword || !otp){
-      return res.status(400).json({
-        success: false,
-        message: "Email, otp, Password and confirmPassword required for password change."
-      });
+      return res.status(StatusCodes.BAD_REQUEST).json(errorResponse("Email, otp, Password and confirmPassword required for password change."));
     }
 
     const user = await prisma.user.findFirst({
@@ -618,30 +533,18 @@ export const changePassword =  async (req: Request, res: Response) => {
     })
 
     if (!user){
-      return res.status(404).json({
-        success: false,
-        message: "User not found with the given email"
-      });
+      return res.status(StatusCodes.NOT_FOUND).json(errorResponse("User not found with the given email."));
     }
     if (otp !== otpDetails?.otpToken){
-      return res.status(400).json({
-        success: false,
-        otp: "The provided otp is invalid"
-      });
+      return res.status(StatusCodes.BAD_REQUEST).json(errorResponse("The provided otp is invalid."));
     }
 
     if (otpDetails?.otpExpiry! < new Date() ){
-      return res.status(400).json({
-        success: false,
-        message: "The provided otp has been expired."
-      })
+      return res.status(StatusCodes.BAD_REQUEST).json(errorResponse("The provided otp has been expired."))
     }
   
     if (password !== confirmPassword){
-      return res.status(400).json({
-        success: false,
-        message: "Passwords do not match."
-      });
+      return res.status(StatusCodes.BAD_REQUEST).json(errorResponse("Passwords do not match."));
     }
 
     const hashPassword = await bcrypt.hash(confirmPassword, 10);
@@ -655,18 +558,11 @@ export const changePassword =  async (req: Request, res: Response) => {
       }
     });
     if (!updatePassword){
-      return res.status(400).json({
-        success: false,
-        message: "Password coudln't be changed. Please try again."
-      });
+      return res.status(StatusCodes.BAD_REQUEST).json(errorResponse("Password coudln't be changed. Please try again."));
     }
-    return res.status(200).json({
-      success: true,
-      message: "Password changed successfully."
-    })
+    return res.status(StatusCodes.OK).json(successResponse("Password changed successfully."))
   } catch (error: any) {
-    console.log(error);
-    return res.status(500).json({
+    return res.status(StatusCodes.BAD_REQUEST).json({
       success: false,
       message: "Error changing your password",
       error: error.message
@@ -686,24 +582,15 @@ export const resetPassword = async (req: Request, res: Response) => {
     }); 
     console.log(user);
     if (!user){
-      return res.status(404).json({
-        success: false,
-        message: "User not found with given id"
-      });
+      return res.status(StatusCodes.NOT_FOUND).json(errorResponse("User not found with given id."));
     }
     if (newPassword !== confirmPassword){
-      return res.status(400).json({
-        success: false,
-        message: "Passwords do not match."
-      });
+      return res.status(StatusCodes.BAD_REQUEST).json(errorResponse("Passwords do not match."));
     }
     console.log(password);
     const checkPassword = await bcrypt.compare(password, user.password!);
     if (!checkPassword){
-      return res.status(400).json({
-        success: false,
-        message: "The password you provided is not correct"
-      });
+      return res.status(StatusCodes.BAD_REQUEST).json(errorResponse("The password you provided is not correct."));
     }
     const hashPassword = await bcrypt.hash(confirmPassword, 10);
     
@@ -716,17 +603,11 @@ export const resetPassword = async (req: Request, res: Response) => {
       }
     });
     if (!updateUser){
-      return res.status(400).json({
-        success: false,
-        message: "Your password couldn't be changed"
-      });
+      return res.status(StatusCodes.BAD_REQUEST).json(errorResponse("Your password couldn't be changed."));
     }
-    return res.status(200).json({
-      success: true,
-      message: "Passwords changed successfully."
-    })
+    return res.status(StatusCodes.OK).json(successResponse("Passwords changed successfully."))
   } catch (error: any) {
-    return res.status(500).json({
+    return res.status(StatusCodes.BAD_REQUEST).json({
       success: false,
       message: "Error resetting your password",
       error: error.message
@@ -740,10 +621,7 @@ export const resetAdminPassword = async(req: Request, res: Response, next: NextF
   
     const { password, newPassword, confirmPassword } = req.body;
     if (newPassword !== confirmPassword){
-      return res.status(400).json({
-        success: false,
-        message: "Passwords do not match."
-      })
+      return res.status(StatusCodes.BAD_REQUEST).json(errorResponse("Passwords do not match."))
     }
     const admin = await prisma.user.findFirst({
       where:{
@@ -751,17 +629,11 @@ export const resetAdminPassword = async(req: Request, res: Response, next: NextF
       }
     });
     if (!admin){
-      return res.status(500).json({
-        success: false,
-        message: "Admin not found with given email."
-      });
+      return res.status(StatusCodes.NOT_FOUND).json(errorResponse("Admin not found with given email."));
     }
     const compare = await bcrypt.compare(password, admin.password!);
     if (!compare){
-      return res.status(400).json({
-        success: false,
-        message: "Invalid password."
-      })
+      return res.status(StatusCodes.BAD_REQUEST).json(errorResponse("Invalid password."))
     }
     const hashedPassword = await bcrypt.hash(confirmPassword, 10);
     const updatePassword = await prisma.user.update({
@@ -772,25 +644,16 @@ export const resetAdminPassword = async(req: Request, res: Response, next: NextF
       }
     });
     if (!updatePassword){
-      return res.status(400).json({
-        success: false,
-        message:"Your password could not be changed."
-      });
+      return res.status(StatusCodes.BAD_REQUEST).json(errorResponse("Your password could not be changed."));
     }
     try {
       const sendResetPasswordEmail = await sendPasswordResetSuccessEmail(req.authUser?.email!);
     } catch (error) {
-      return res.status(500).json({
-        success: false,
-        message: "There was some error sending an email, passwords have been changed."
-      });
+      return res.status(StatusCodes.INTERNAL_SERVER_ERROR).json(errorResponse("There was some error sending an email, passwords have been changed."))
     }
-    return res.status(200).json({
-      success: true,
-      message: "Passwords changed successfully."
-    })
+    return res.status(StatusCodes.OK).json(successResponse("Passwords changed successfully."))
   } catch (error) {
-    return res.status(500).json({
+    return res.status(StatusCodes.INTERNAL_SERVER_ERROR).json({
       success: false,
       message: "Password couldn't be changed"
     })

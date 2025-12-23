@@ -10,6 +10,8 @@ import prisma from '../utils/prisma.util';
 import { Decimal } from '@prisma/client/runtime/library';
 import { ActivityLogger } from '../services/activityLog.service';
 import { file, flushPages } from 'pdfkit';
+import { StatusCodes } from '../utils/statusCodes';
+import { successResponse, errorResponse } from '../utils/response';
 
 // const GIFT_CARD_LIMIT = 10;
 
@@ -35,10 +37,7 @@ export const createGiftCard = async (req: Request, res: Response) => {
     const merchantId = authReq.authUser?.userId;
 
     if (!merchantId) {
-      return res.status(401).json({
-        success: false,
-        message: 'Unauthorized',
-      });
+      return res.status(StatusCodes.BAD_REQUEST).json(errorResponse("Unauthorized"));
     }
 
     const merchant = await prisma.merchantProfile.findUnique({
@@ -50,10 +49,7 @@ export const createGiftCard = async (req: Request, res: Response) => {
     });
     
     if (!merchant){
-      return res.status(404).json({
-        success: false,
-        message: "Merchant not found with given Id."
-      })
+      return res.status(StatusCodes.NOT_FOUND).json(errorResponse("Merchant not found with given Id."))
     }
 
     // Validate request body
@@ -68,10 +64,7 @@ export const createGiftCard = async (req: Request, res: Response) => {
     });
 
     if (existingCardsCount >= merchant.giftCardLimit) {
-      return res.status(400).json({
-        success: false,
-        message: `You have reached the maximum limit of ${merchant.giftCardLimit} active gift cards`,
-      });
+      return res.status(StatusCodes.BAD_REQUEST).json(errorResponse(`You have reached the maximum limit of ${merchant.giftCardLimit} active gift cards`));
     }
     // Create gift card
     const giftCard = await prisma.giftCard.create({
@@ -107,11 +100,8 @@ export const createGiftCard = async (req: Request, res: Response) => {
       req
     );
 
-    return res.status(201).json({
-      success: true,
-      message: 'Gift card created successfully',
-      data: { giftCard, settings: merchant.settings},
-    });
+    return res.status(StatusCodes.CREATED).json(successResponse("Gift card created successfully", { giftCard, settings: merchant.settings}));
+
   } catch (error: any) {
     console.error('Create gift card error:', error);
 
@@ -123,7 +113,7 @@ export const createGiftCard = async (req: Request, res: Response) => {
       });
     }
 
-    return res.status(500).json({
+    return res.status(StatusCodes.INTERNAL_SERVER_ERROR).json({
       success: false,
       message: 'Internal server error',
       error: error.message,
@@ -142,10 +132,7 @@ export const getMyGiftCards = async (req: Request, res: Response) => {
     const merchantId = authReq.authUser?.userId;
 
     if (!merchantId) {
-      return res.status(401).json({
-        success: false,
-        message: 'Unauthorized',
-      });
+      return res.status(StatusCodes.UNAUTHORIZED).json(errorResponse("Unauthorized"));
     }
     const merchant = await prisma.merchantProfile.findUnique({
       where:{
@@ -157,10 +144,7 @@ export const getMyGiftCards = async (req: Request, res: Response) => {
     });
 
     if (!merchant){
-      return res.status(404).json({
-        success: false,
-        message: "Merchant not found with given Id."
-      })
+      return res.status(StatusCodes.NOT_FOUND).json(errorResponse("Merchant not found with given Id."))
     }
 
     const giftCards = await prisma.giftCard.findMany({
@@ -189,21 +173,18 @@ export const getMyGiftCards = async (req: Request, res: Response) => {
     // Count only active cards for limit calculation
     const activeCardsCount = giftCards.filter(card => card.isActive).length;
 
-    return res.status(200).json({
-      success: true,
-      data: { 
+    return res.status(StatusCodes.OK).json(successResponse("Gift cards fetched successfully.", { 
         giftCards,
         settings: merchant.settings,
         total: giftCards.length,
         activeCards: activeCardsCount,
         limit: merchant.giftCardLimit,
         remaining: Math.max(0, merchant.giftCardLimit - activeCardsCount),
-      },
-    });
+      }));
   } catch (error: any) {
     console.error('Get gift cards error:', error);
 
-    return res.status(500).json({
+    return res.status(StatusCodes.INTERNAL_SERVER_ERROR).json({
       success: false,
       message: 'Internal server error',
       error: error.message,
@@ -223,10 +204,7 @@ export const getGiftCardById = async (req: Request, res: Response) => {
     const { id } = req.params;
 
     if (!merchantId) {
-      return res.status(401).json({
-        success: false,
-        message: 'Unauthorized',
-      });
+      return res.status(StatusCodes.UNAUTHORIZED).json(errorResponse("Unauthorized"));
     }
 
     const merchant = await prisma.merchantProfile.findUnique({
@@ -238,10 +216,7 @@ export const getGiftCardById = async (req: Request, res: Response) => {
     });
     
     if (!merchant){
-      return res.status(400).json({
-        success: false,
-        message: "No merchant found with given id."
-      });
+      return res.status(StatusCodes.BAD_REQUEST).json(errorResponse("No merchant found with given id."));
     }
 
     const giftCard = await prisma.giftCard.findUnique({
@@ -276,31 +251,22 @@ export const getGiftCardById = async (req: Request, res: Response) => {
     });
 
     if (!giftCard) {
-      return res.status(404).json({
-        success: false,
-        message: 'Gift card not found',
-      });
+      return res.status(StatusCodes.NOT_FOUND).json(errorResponse("Gift card not found."));
     }
 
     // Check if the gift card belongs to the merchant
     if (giftCard.merchantId !== merchantId) {
-      return res.status(403).json({
-        success: false,
-        message: 'You do not have permission to access this gift card',
-      });
+      return res.status(StatusCodes.FORBIDDEN).json(errorResponse("You do not have permission to access this gift card."));
     }
 
-    return res.status(200).json({
-      success: true,
-      data: { 
+    return res.status(StatusCodes.OK).json(successResponse("Gift card fetched successfully.",{ 
         giftCard,
         settings: merchant.settings
-      },
-    });
+      }));
   } catch (error: any) {
     console.error('Get gift card error:', error);
 
-    return res.status(500).json({
+    return res.status(StatusCodes.INTERNAL_SERVER_ERROR).json({
       success: false,
       message: 'Internal server error',
       error: error.message,
@@ -320,10 +286,7 @@ export const updateGiftCard = async (req: Request, res: Response) => {
     const { id } = req.params;
 
     if (!merchantId) {
-      return res.status(401).json({
-        success: false,
-        message: 'Unauthorized',
-      });
+      return res.status(StatusCodes.UNAUTHORIZED).json(errorResponse("Unauthorized"));
     }
 
     // Validate request body
@@ -335,17 +298,11 @@ export const updateGiftCard = async (req: Request, res: Response) => {
     });
 
     if (!existingCard) {
-      return res.status(404).json({
-        success: false,
-        message: 'Gift card not found',
-      });
+      return res.status(StatusCodes.NOT_FOUND).json(errorResponse("Gift card not found"));
     }
 
     if (existingCard.merchantId !== merchantId) {
-      return res.status(403).json({
-        success: false,
-        message: 'You do not have permission to update this gift card',
-      });
+      return res.status(StatusCodes.FORBIDDEN).json(errorResponse("You do not have permission to update this gift card."));
     }
 
 
@@ -415,11 +372,8 @@ export const updateGiftCard = async (req: Request, res: Response) => {
       }
     }
 
-    return res.status(200).json({
-      success: true,
-      message: 'Gift card updated successfully',
-      data: { giftCard },
-    });
+    return res.status(StatusCodes.OK).json(successResponse("Gift card updated successfully", { giftCard }));
+
   } catch (error: any) {
     console.error('Update gift card error:', error);
 
@@ -431,7 +385,7 @@ export const updateGiftCard = async (req: Request, res: Response) => {
       });
     }
 
-    return res.status(500).json({
+    return res.status(StatusCodes.INTERNAL_SERVER_ERROR).json({
       success: false,
       message: 'Internal server error',
       error: error.message,
@@ -451,10 +405,7 @@ export const deleteGiftCard = async (req: Request, res: Response) => {
     const { id } = req.params;
 
     if (!merchantId) {
-      return res.status(401).json({
-        success: false,
-        message: 'Unauthorized',
-      });
+      return res.status(StatusCodes.UNAUTHORIZED).json(errorResponse("Unauthorized"));
     }
 
     // Check if gift card exists and belongs to merchant
@@ -470,17 +421,11 @@ export const deleteGiftCard = async (req: Request, res: Response) => {
     });
 
     if (!existingCard) {
-      return res.status(404).json({
-        success: false,
-        message: 'Gift card not found',
-      });
+      return res.status(StatusCodes.NOT_FOUND).json(errorResponse("Gift card not found."));
     }
 
     if (existingCard.merchantId !== merchantId) {
-      return res.status(403).json({
-        success: false,
-        message: 'You do not have permission to delete this gift card',
-      });
+      return res.status(StatusCodes.FORBIDDEN).json(errorResponse("You do not have permission to delete this gift card."));
     }
 
     // Check if gift card has been purchased
@@ -499,10 +444,7 @@ export const deleteGiftCard = async (req: Request, res: Response) => {
         severity: 'WARNING',
         req
       });
-      return res.status(400).json({
-        success: false,
-        message: 'Cannot delete gift card that has been purchased. You can deactivate it instead.',
-      });
+      return res.status(StatusCodes.BAD_REQUEST).json(errorResponse("Cannot delete gift card that has been purchased. You can deactivate it instead."));
     }
 
     // Delete gift card
@@ -527,14 +469,10 @@ export const deleteGiftCard = async (req: Request, res: Response) => {
       req
     });
 
-    return res.status(200).json({
-      success: true,
-      message: 'Gift card deleted successfully',
-    });
+    return res.status(StatusCodes.OK).json(successResponse("Gift card deleted successfully"));
   } catch (error: any) {
-    console.error('Delete gift card error:', error);
 
-    return res.status(500).json({
+    return res.status(StatusCodes.INTERNAL_SERVER_ERROR).json({
       success: false,
       message: 'Internal server error',
       error: error.message,
@@ -575,17 +513,14 @@ export const getActiveGiftCards = async (req: Request, res: Response) => {
       },
     });
 
-    return res.status(200).json({
-      success: true,
-      data: { 
+    return res.status(StatusCodes.OK).json(successResponse("Active gift cards fetched successfully.", { 
         giftCards,
         total: giftCards.length,
-      },
-    });
+      }));
   } catch (error: any) {
     console.error('Get active gift cards error:', error);
 
-    return res.status(500).json({
+    return res.status(StatusCodes.INTERNAL_SERVER_ERROR).json({
       success: false,
       message: 'Internal server error',
       error: error.message,
@@ -603,10 +538,7 @@ export const createSettings = async (req:Request, res: Response) => {
       }
     });
     if (!merchant){
-      return res.status(404).json({
-        success: false,
-        message: "Merchant not found with the given id."
-      });
+      return res.status(StatusCodes.NOT_FOUND).json(errorResponse("Merchant not found with the given id."));
     }
     const findSettings = await prisma.settings.findUnique({
       where:{
@@ -614,10 +546,7 @@ export const createSettings = async (req:Request, res: Response) => {
       }
     });
     if (findSettings){
-      return res.status(400).json({
-        success: false,
-        message: "Settings have already been created, please update it."
-      });
+      return res.status(StatusCodes.BAD_REQUEST).json(errorResponse("Settings have already been created, please update it."));
     }
     const settings = await prisma.settings.create({
       data:{
@@ -629,19 +558,12 @@ export const createSettings = async (req:Request, res: Response) => {
       }
     });
     if (!settings){
-      return res.status(400).json({
-        success: false, 
-        message: "Coudln't create settings for gift card."
-      });
+      return res.status(StatusCodes.BAD_REQUEST).json(successResponse("Coudln't create settings for gift card."));
     }   
-    return res.status(200).json({
-      success: true,
-      message: "Created settings for gift card successfully.",
-      data: settings
-    });
+    return res.status(StatusCodes.OK).json(successResponse("Created settings for gift card successfully.", settings));
 
   } catch (error: any) {
-    return res.status(500).json({
+    return res.status(StatusCodes.INTERNAL_SERVER_ERROR).json({
       success: false,
       message: "Error creating settings",
       error: error.message
@@ -658,10 +580,7 @@ export const updateSettings = async (req: Request, res: Response) => {
     });
 
     if (!merchant) {
-      return res.status(400).json({
-        success: false,
-        message: "No merchant found with the given id.",
-      });
+      return res.status(StatusCodes.NOT_FOUND).json(errorResponse("No merchant found with the given id."));
     }
 
     const parsed = udpateSettingSchema.safeParse(req.body);
@@ -677,10 +596,7 @@ export const updateSettings = async (req: Request, res: Response) => {
     const updateData = parsed.data;
 
     if (Object.keys(updateData).length === 0) {
-      return res.status(400).json({
-        success: false,
-        message: "At least one field must be provided to update.",
-      });
+      return res.status(StatusCodes.BAD_REQUEST).json(errorResponse("At least one field must be provided to update."));
     }
 
     const settings = await prisma.settings.update({
@@ -689,19 +605,12 @@ export const updateSettings = async (req: Request, res: Response) => {
     });
 
     if (!settings){
-      return res.status(400).json({
-        success: false,
-        message: "Your settings couldn't be updated."
-      })
+      return res.status(StatusCodes.BAD_REQUEST).json(errorResponse("Your settings couldn't be updated."))
     }
-    return res.status(200).json({
-      success: true,
-      message: "Settings updated successfully.",
-      data: settings
-    })
+    return res.status(StatusCodes.OK).json(successResponse("Settings updated successfully.", settings))
 
   } catch (error: any) {
-    return res.status(500).json({
+    return res.status(StatusCodes.INTERNAL_SERVER_ERROR).json({
       success: false,
       message: "Error updating settings",
       error: error.message
@@ -718,10 +627,7 @@ export const getCardSetting = async (req: Request, res: Response) => {
       }
     });
     if (!merchant){
-      return res.status(400).json({
-        success: false,
-        message: "No merchant found with given id."
-      });
+      return res.status(StatusCodes.BAD_REQUEST).json(errorResponse("No merchant found with given id."));
     }
     const settings = await prisma.settings.findFirst({
       where:{
@@ -729,18 +635,11 @@ export const getCardSetting = async (req: Request, res: Response) => {
       }
     });
     if (!settings){
-      return res.status(400).json({
-        success: false,
-        message: "No settings available."
-      });
+      return res.status(StatusCodes.BAD_REQUEST).json(errorResponse("No settings available."));
     }
-    return res.status(200).json({
-      success: true,
-      message: "Fetched card setting successfully.",
-      data: settings
-    })
+    return res.status(StatusCodes.OK).json(successResponse("Fetched card setting successfully.", settings))
   } catch (error: any) {
-    return res.status(500).json({
+    return res.status(StatusCodes.INTERNAL_SERVER_ERROR).json({
       success: false,
       message: "Error fetching card settings",
       error: error.message

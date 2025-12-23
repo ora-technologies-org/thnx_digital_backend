@@ -20,7 +20,7 @@ import {
   merchantRegister,
 } from "../controllers/merchant.controller";
 import { validate } from "../middleware/validation.middleware";
-import { changePasswordSchema, loginSchema, resetPasswordSchema } from "../validators/auth.validator";
+import { changePasswordSchema, loginSchema, merchantQuickRegisterSchema, resetPasswordSchema } from "../validators/auth.validator";
 
 const router = express.Router();
 
@@ -74,7 +74,7 @@ const router = express.Router();
  *       500:
  *         $ref: '#/components/responses/InternalServerError'
  */
-router.post("/merchant/register", merchantRegister);
+router.post("/merchant/register", validate(merchantQuickRegisterSchema), merchantRegister);
 
 /**
  * @swagger

@@ -15,7 +15,7 @@ import { otpGenerator } from "../helpers/otp/otpGenerator";
 import { clientCommandMessageReg } from "bullmq";
 import { sendOTPEmail, sendWelcomeEmail } from "../utils/email.util";
 import { StatusCodes } from "../utils/statusCodes";
-import { error, success } from "../utils/response";
+import { errorResponse, successResponse } from "../utils/response";
 import { Status } from "@prisma/client";
 
 // Define authenticated request interface
@@ -50,7 +50,7 @@ export const purchaseGiftCard = async (req: Request, res: Response) => {
     });
 
     if (!giftCard) {
-      return res.status(StatusCodes.NOT_FOUND).json(error("Gift card not found"));
+      return res.status(StatusCodes.NOT_FOUND).json(errorResponse("Gift card not found"));
     }
 
     if (!giftCard.isActive) {
@@ -69,7 +69,7 @@ export const purchaseGiftCard = async (req: Request, res: Response) => {
       });
 
 
-      return res.status(StatusCodes.BAD_REQUEST).json(error("This gift card is no longer available"));
+      return res.status(StatusCodes.BAD_REQUEST).json(errorResponse("This gift card is no longer available"));
     }
 
     // Check if gift card is expired
@@ -87,7 +87,7 @@ export const purchaseGiftCard = async (req: Request, res: Response) => {
         severity: 'WARNING',
         req
       });
-      return res.status(StatusCodes.BAD_REQUEST).json(error("This gift card has expired"));
+      return res.status(StatusCodes.BAD_REQUEST).json(errorResponse("This gift card has expired"));
     }
 
     // Generate unique QR code with Thnx-Digital prefix
@@ -171,7 +171,7 @@ export const purchaseGiftCard = async (req: Request, res: Response) => {
     }
     
 
-    return res.status(StatusCodes.CREATED).json(success("Gift card purchased successfully! Check your email for details.",
+    return res.status(StatusCodes.CREATED).json(successResponse("Gift card purchased successfully! Check your email for details.",
         {purchase: {
           id: purchasedCard.id,
           qrCode: purchasedCard.qrCode,
@@ -246,10 +246,7 @@ export const getGiftCardByQR = async (req: Request, res: Response) => {
     });
 
     if (!purchasedCard) {
-      return res.status(404).json({
-        success: false,
-        message: "Gift card not found",
-      });
+      return res.status(StatusCodes.NOT_FOUND).json(errorResponse("Gift card not found"));
     }
 
     // Auto-update status if expired
@@ -279,7 +276,7 @@ export const getGiftCardByQR = async (req: Request, res: Response) => {
       0,
     );
 
-    return res.status(StatusCodes.OK).json(success("Gift card fetched successfully.",{
+    return res.status(StatusCodes.OK).json(successResponse("Gift card fetched successfully.",{
         purchase: {
           id: purchasedCard.id,
           qrCode: purchasedCard.qrCode,
@@ -327,7 +324,7 @@ export const redeemGiftCard = async (req: Request, res: Response) => {
     const merchantId = authReq.authUser?.userId;
 
     if (!merchantId) {
-      return res.status(StatusCodes.UNAUTHORIZED).json(error("Unauthorized"));
+      return res.status(StatusCodes.UNAUTHORIZED).json(errorResponse("Unauthorized"));
     }
 
     // Validate request body
@@ -356,7 +353,7 @@ export const redeemGiftCard = async (req: Request, res: Response) => {
       );
 
 
-      return res.status(StatusCodes.NOT_FOUND).json(error("Invalid QR code"));
+      return res.status(StatusCodes.NOT_FOUND).json(errorResponse("Invalid QR code"));
     }
 
     // Check if the gift card belongs to this merchant
@@ -370,7 +367,7 @@ export const redeemGiftCard = async (req: Request, res: Response) => {
         req
       );
 
-      return res.status(StatusCodes.FORBIDDEN).json(error("This gift card does not belong to your business"));
+      return res.status(StatusCodes.FORBIDDEN).json(errorResponse("This gift card does not belong to your business"));
     }
     // Check if expired
     if (new Date() > purchasedCard.expiresAt) {
@@ -382,7 +379,7 @@ export const redeemGiftCard = async (req: Request, res: Response) => {
         merchantId,
         req
       );
-      return res.status(400).json(success("This gift card has expired", {expiresAt: purchasedCard.expiresAt}),);
+      return res.status(400).json(successResponse("This gift card has expired", {expiresAt: purchasedCard.expiresAt}),);
     }
 
     // Check status
@@ -395,11 +392,7 @@ export const redeemGiftCard = async (req: Request, res: Response) => {
         merchantId,
         req
       );
-      return res.status(400).json({
-        success: false,
-        message: `Gift card is ${purchasedCard.status.toLowerCase().replace("_", " ")}`,
-        status: purchasedCard.status,
-      });
+      return res.status(StatusCodes.BAD_REQUEST).json(errorResponse(`Gift card is ${purchasedCard.status.toLowerCase().replace("_", " ")}`, { status: purchasedCard.status }));
     }
 
     // Check if sufficient balance
@@ -511,7 +504,7 @@ export const redeemGiftCard = async (req: Request, res: Response) => {
       req
     );
 
-    return res.status(StatusCodes.OK).json(success(newBalance === 0
+    return res.status(StatusCodes.OK).json(successResponse(newBalance === 0
           ? "Gift card fully redeemed!"
           : "Gift card redeemed successfully", {
         redemption: {
@@ -548,7 +541,7 @@ export const getRedemptionHistory = async (req: Request, res: Response) => {
     const merchantId = authReq.authUser?.userId;
 
     if (!merchantId) {
-      return res.status(StatusCodes.UNAUTHORIZED).json(error("Unauthorized"));
+      return res.status(StatusCodes.UNAUTHORIZED).json(errorResponse("Unauthorized"));
     }
 
     // Get query params for pagination
@@ -604,7 +597,7 @@ export const getRedemptionHistory = async (req: Request, res: Response) => {
       0,
     );
 
-    return res.status(StatusCodes.OK).json(success("Redemptions history fetched successfully.", {
+    return res.status(StatusCodes.OK).json(successResponse("Redemptions history fetched successfully.", {
         redemptions,
         pagination: {
           total,
@@ -633,7 +626,7 @@ export const getCustomerPurchases = async (req: Request, res: Response) => {
 
     // Basic email validation
     if (!email || !email.includes("@")) {
-      return res.status(StatusCodes.BAD_REQUEST).json(error("Invalid email address."));
+      return res.status(StatusCodes.BAD_REQUEST).json(errorResponse("Invalid email address."));
     }
 
     const purchases = await prisma.purchasedGiftCard.findMany({
@@ -723,10 +716,10 @@ export const getCustomerPurchases = async (req: Request, res: Response) => {
         .length,
     };
 
-    return res.status(StatusCodes.OK).json(success("Cusotmer Purchases fetched successfullly.", {purchases, stats}));
+    return res.status(StatusCodes.OK).json(successResponse("Cusotmer Purchases fetched successfullly.", {purchases, stats}));
 
   } catch (error: any) {
-      return res.status(StatusCodes.INTERNAL_SERVER_ERROR).json(error("Internal Server error", error.message));
+      return res.status(StatusCodes.INTERNAL_SERVER_ERROR).json(errorResponse("Internal Server error", error.message));
   }
 };
 
@@ -734,7 +727,7 @@ export const requestOtp = async (req: Request, res: Response, next: NextFunction
   try {
     const { purchaseId } = req.body;
     if (!purchaseId){
-      return res.status(StatusCodes.BAD_REQUEST).json(error("Purchased Id is required to request for otp."));
+      return res.status(StatusCodes.BAD_REQUEST).json(errorResponse("Purchased Id is required to request for otp."));
     }
     const purchasedGiftCard = await prisma.purchasedGiftCard.findUnique({
       where: {
@@ -742,7 +735,7 @@ export const requestOtp = async (req: Request, res: Response, next: NextFunction
       }
     });
     if (!purchasedGiftCard){
-      return res.status(StatusCodes.NOT_FOUND).json(error("No purchase record found with the given id."));
+      return res.status(StatusCodes.NOT_FOUND).json(errorResponse("No purchase record found with the given id."));
     }
     const otp = await otpGenerator(3);
     const createOTP = await prisma.giftCardOtp.create({
@@ -758,7 +751,7 @@ export const requestOtp = async (req: Request, res: Response, next: NextFunction
     } catch (error: any) {
       return res.status(StatusCodes.INTERNAL_SERVER_ERROR).json(error("Error sending mail to requested email."))
     }
-    return res.status(StatusCodes.OK).json(success("OTP has successfully been sent to your email."));
+    return res.status(StatusCodes.OK).json(successResponse("OTP has successfully been sent to your email."));
 
   } catch (error: any) {
     return res.status(StatusCodes.INTERNAL_SERVER_ERROR).json(error("Internal Server error", error.message));
@@ -769,7 +762,7 @@ export const verifyOtp = async (req: Request, res: Response, next: NextFunction)
   try {
     const { purchaseId, otp } = req.body;
     if (!purchaseId || !otp){
-      return res.status(StatusCodes.BAD_REQUEST).json(error("PurchaseId and OTP are required for verification."));
+      return res.status(StatusCodes.BAD_REQUEST).json(errorResponse("PurchaseId and OTP are required for verification."));
     }
     const findOtp = await prisma.giftCardOtp.findFirst({
       where:{
@@ -781,18 +774,18 @@ export const verifyOtp = async (req: Request, res: Response, next: NextFunction)
       }
     });
     if (!findOtp){
-      return res.status(StatusCodes.BAD_REQUEST).json(error("OTP not found, please try requesting for otp once again."));
+      return res.status(StatusCodes.BAD_REQUEST).json(errorResponse("OTP not found, please try requesting for otp once again."));
     };
 
     if (findOtp.used === true){
-      return res.status(StatusCodes.BAD_REQUEST).json(error("The provided otp has already been used."));
+      return res.status(StatusCodes.BAD_REQUEST).json(errorResponse("The provided otp has already been used."));
     }
 
     if (otp !== findOtp.otpToken){
-      return res.status(StatusCodes.BAD_REQUEST).json(error("The provided otp is invalid."));
+      return res.status(StatusCodes.BAD_REQUEST).json(errorResponse("The provided otp is invalid."));
     }
     if (findOtp.otpExpiry < new Date()){
-      return res.status(StatusCodes.BAD_REQUEST).json(error("The provided otp has been expired."));
+      return res.status(StatusCodes.BAD_REQUEST).json(errorResponse("The provided otp has been expired."));
     };
     const used = await prisma.giftCardOtp.update({
       where:{
@@ -801,7 +794,7 @@ export const verifyOtp = async (req: Request, res: Response, next: NextFunction)
         used: true
       }
     });
-    return res.status(StatusCodes.OK).json(success("OTP verified successfully"))
+    return res.status(StatusCodes.OK).json(successResponse("OTP verified successfully"))
 
   } catch (error: any) {
     return res.status(StatusCodes.INTERNAL_SERVER_ERROR).json(error("Internal Server error", error.message));

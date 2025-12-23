@@ -3,23 +3,13 @@ import { createContactUsSchema } from "../validators/user.validator";
 import prisma from "../utils/prisma.util";
 import { sendContactUsAdminNotification, sendContactUsConfirmation } from "../utils/email.util";
 import { mode } from "crypto-js";
+import { StatusCodes } from "../utils/statusCodes";
+// import { success } from "../utils/response";
+import { error } from "console";
 
 export const createContactUs = async (req: Request, res: Response, next: NextFunction) => {
     try {
-        const parsedData = createContactUsSchema.safeParse(req.body);
-        if (!parsedData.success) {
-            const errors = parsedData.error.issues.map((issue) => ({
-                field: issue.path[0],
-                message: issue.message,
-            }));
-
-            return res.status(400).json({
-                success: false,
-                errors,
-            });
-        }
-
-        const { email, name, phone, message } = parsedData.data;
+        const { email, name, phone, message } = req.body;
         
         const contact = await prisma.contactUs.create({
             data:{
@@ -30,9 +20,7 @@ export const createContactUs = async (req: Request, res: Response, next: NextFun
             }
         })
         if (!contact){
-            return res.status(400).json({
-                message: "Contact us couldn't be created."
-            });
+            return res.status(StatusCodes.BAD_REQUEST).json(error("Contact us couldn't be submitted."));
         }
         try {
             const sendUser = sendContactUsConfirmation(email, name, message);
@@ -43,11 +31,7 @@ export const createContactUs = async (req: Request, res: Response, next: NextFun
                 message: "Error sending a mail. Your contact us record has been submitted."
             })
         }
-        return res.status(200).json({
-            success: true,
-            message: "Contact us submitted successfully.",
-            data: contact
-        })
+        return res.status(StatusCodes.OK).json("Contact us submitted successfully.", );
 
     } catch (error) {
         return res.status(500).json({
@@ -83,16 +67,9 @@ export const getAllContactUs = async (req: Request, res: Response, next: NextFun
         }
         })
         if (!contact){
-            return res.status(400).json({
-                success: false,
-                message: "Contact us data not found."
-            })
+            return res.status(StatusCodes.NOT_FOUND).json(error("Contact us data not found."))
         }
-        return res.status(200).json({
-            success: true,
-            message: "Contact Us fetched successfully.",
-            data: contact
-        })
+        return res.status(StatusCodes.OK).json("Contact Us fetched successfully.")
     } catch (error) {
         
     }
