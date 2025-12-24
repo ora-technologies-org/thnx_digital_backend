@@ -677,6 +677,7 @@ export const adminCreateMerchant = async (req: Request, res: Response) => {
           name: result.user.name,
           role: result.user.role,
         },
+        merchantProfile: result.merchantProfile
       }));
   } catch (error: any) {
     console.error("Admin create merchant error:", error);
@@ -1288,13 +1289,13 @@ export const getGiftCardByMerchant = async (req: Request, res: Response, next: N
 
     const merchant=  await prisma.merchantProfile.findFirst({
       where:{
-        id: merchantId
+        userId: merchantId
       }
     });
 
     const setting = await prisma.settings.findFirst({
       where:{
-        merchantId: merchant?.userId
+        merchantId: merchant?.id
       }
     });
     
@@ -1890,7 +1891,7 @@ export const updateSupportTicket = async (req: Request, res: Response, next: Nex
   try {
     const { ticketId } = req.params;
     const { response, status } = req.body;
-    if (!response && !status){
+    if (!response || !status){
       return res.status(StatusCodes.BAD_REQUEST).json(errorResponse("Response and status are required to update the ticket."))
     }
 

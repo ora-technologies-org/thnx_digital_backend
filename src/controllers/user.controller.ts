@@ -4,7 +4,7 @@ import prisma from "../utils/prisma.util";
 import { sendContactUsAdminNotification, sendContactUsConfirmation } from "../utils/email.util";
 import { mode } from "crypto-js";
 import { StatusCodes } from "../utils/statusCodes";
-// import { success } from "../utils/response";
+import { successResponse, errorResponse } from "../utils/response";
 import { error } from "console";
 
 export const createContactUs = async (req: Request, res: Response, next: NextFunction) => {
@@ -31,7 +31,7 @@ export const createContactUs = async (req: Request, res: Response, next: NextFun
                 message: "Error sending a mail. Your contact us record has been submitted."
             })
         }
-        return res.status(StatusCodes.OK).json("Contact us submitted successfully.", );
+        return res.status(StatusCodes.OK).json(successResponse("Contact us submitted successfully.", contact));
 
     } catch (error) {
         return res.status(500).json({
@@ -69,7 +69,7 @@ export const getAllContactUs = async (req: Request, res: Response, next: NextFun
         if (!contact){
             return res.status(StatusCodes.NOT_FOUND).json(error("Contact us data not found."))
         }
-        return res.status(StatusCodes.OK).json("Contact Us fetched successfully.")
+        return res.status(StatusCodes.OK).json(errorResponse("Contact Us fetched successfully.", contact))
     } catch (error) {
         
     }
