@@ -4,7 +4,7 @@ import swaggerJsdoc from "swagger-jsdoc";
 import path from "path";
 
 // Get absolute path to routes directory
-const routesDir = path.join(__dirname, "..", "routes");
+const routesDir = path.join(__dirname, "..", "routes", "**/*.routes.ts");
 
 const options: swaggerJsdoc.Options = {
   definition: {
@@ -433,7 +433,7 @@ const options: swaggerJsdoc.Options = {
             },
           },
         },
-         GetOtpRequest: {
+        GetOtpRequest: {
         type: "object",
         required: ["email"],
         properties: {
@@ -606,7 +606,9 @@ const options: swaggerJsdoc.Options = {
       { name: "Purchases", description: "Gift card purchase and redemption" },
     ],
   },
-  apis: [path.join(routesDir, "*.js")],
+  apis: [
+        path.join(process.cwd(), "src", "**/*.routes.ts"),
+    ],
 };
 
 // Debug logging
