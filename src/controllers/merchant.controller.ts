@@ -792,15 +792,39 @@ export const adminUpdateMerchant = async (req: Request, res: Response, next: Nex
  */
 export const getPendingMerchants = async (req: Request, res: Response) => {
   try {
-    const { search, sort = "desc" } = req.query;
+    const { search, sortBy = "createdAt", sortOrder = "desc" } = req.query;
+
+    // Pagination params
+    const page = Math.max(parseInt(req.query.page as string) || 1, 1);
+    const limit = Math.max(parseInt(req.query.limit as string) || 10, 1);
+    const skip = (page - 1) * limit;
 
     const whereClause: any = {
       profileStatus: "PENDING_VERIFICATION",
     };
+
     if (search) {
       whereClause.OR = [
         {
           businessName: {
+            contains: search as string,
+            mode: "insensitive",
+          },
+        },
+        {
+          businessEmail: {
+            contains: search as string,
+            mode: "insensitive",
+          },
+        },
+        {
+          city: {
+            contains: search as string,
+            mode: "insensitive",
+          },
+        },
+        {
+          country: {
             contains: search as string,
             mode: "insensitive",
           },
@@ -813,34 +837,73 @@ export const getPendingMerchants = async (req: Request, res: Response) => {
             },
           },
         },
+        {
+          user: {
+            name: {
+              contains: search as string,
+              mode: "insensitive",
+            },
+          },
+        },
       ];
     }
 
+    // Validate sort fields
+    const validSortFields = ["createdAt", "updatedAt", "businessName", "city", "country"];
+    const orderByField = validSortFields.includes(sortBy as string) ? sortBy as string : "createdAt";
+    const order = sortOrder === "asc" ? "asc" : "desc";
 
-    const pendingMerchants = await prisma.merchantProfile.findMany({
-      where: whereClause,
-      include: {
-        user: {
-          select: {
-            id: true,
-            email: true,
-            name: true,
-            phone: true,
-            createdAt: true,
+    const orderBy: any = {};
+    
+    // Handle nested sorting for user fields
+    if (orderByField === "createdAt" || orderByField === "updatedAt") {
+      orderBy[orderByField] = order;
+    } else {
+      orderBy[orderByField] = order;
+    }
+
+    const [pendingMerchants, total] = await Promise.all([
+      prisma.merchantProfile.findMany({
+        where: whereClause,
+        skip,
+        take: limit,
+        include: {
+          user: {
+            select: {
+              id: true,
+              email: true,
+              name: true,
+              phone: true,
+              createdAt: true,
+            },
           },
         },
-      },
-      orderBy: {
-        createdAt: sort === "asc" ? "asc" : "desc",
-      },
-    });
+        orderBy,
+      }),
+      prisma.merchantProfile.count({
+        where: whereClause,
+      }),
+    ]);
 
-    return res.status(StatusCodes.OK).json(successResponse("Pending merchants fetched successfully",{
+    return res.status(StatusCodes.OK).json(
+      successResponse("Pending merchants fetched successfully", {
         merchants: pendingMerchants,
-        count: pendingMerchants.length,
-      }));
+        pagination: {
+          total,
+          page,
+          limit,
+          totalPages: Math.ceil(total / limit),
+        },
+        filters: {
+          search: search || null,
+          sortBy: orderByField,
+          sortOrder: order,
+        },
+      })
+    );
   } catch (error: any) {
     console.error("Get pending merchants error:", error);
+
     return res.status(StatusCodes.INTERNAL_SERVER_ERROR).json({
       success: false,
       message: "Error fetching pending merchants",
@@ -848,6 +911,8 @@ export const getPendingMerchants = async (req: Request, res: Response) => {
     });
   }
 };
+
+
 
 /**
  * @route   POST /api/auth/admin/merchants/:merchantId/verify
@@ -951,13 +1016,19 @@ export const verifyMerchant = async (req: Request, res: Response) => {
  */
 export const getAllMerchants = async (req: Request, res: Response) => {
   try {
-    const { 
-      profileStatus, 
-      active, 
-      sort = "desc", 
+    const {
+      profileStatus,
+      active,
+      sortBy = "createdAt",
+      sortOrder = "desc",
       createdBy,
-      search 
+      search,
     } = req.query;
+
+    // Pagination params
+    const page = Math.max(parseInt(req.query.page as string) || 1, 1);
+    const limit = Math.max(parseInt(req.query.limit as string) || 10, 1);
+    const skip = (page - 1) * limit;
 
     const whereClause: any = {};
 
@@ -976,41 +1047,119 @@ export const getAllMerchants = async (req: Request, res: Response) => {
     }
 
     if (search) {
-      whereClause.businessName = {
-        contains: search as string,
-        mode: "insensitive",
-      };
-    }
-
-    const merchants = await prisma.merchantProfile.findMany({
-      where: whereClause,
-      include: {
-        user: {
-          select: {
-            id: true,
-            email: true,
-            name: true,
-            phone: true,
-            createdAt: true,
-            isActive: true,
+      whereClause.OR = [
+        {
+          businessName: {
+            contains: search as string,
+            mode: "insensitive",
           },
         },
-      },
-      orderBy: {
-        createdAt: sort === "asc" ? "asc" : "desc",
-      },
-    });
+        {
+          businessEmail: {
+            contains: search as string,
+            mode: "insensitive",
+          },
+        },
+        {
+          businessRegistrationNumber: {
+            contains: search as string,
+            mode: "insensitive",
+          },
+        },
+        {
+          city: {
+            contains: search as string,
+            mode: "insensitive",
+          },
+        },
+        {
+          country: {
+            contains: search as string,
+            mode: "insensitive",
+          },
+        },
+        {
+          businessType: {
+            contains: search as string,
+            mode: "insensitive",
+          },
+        },
+        {
+          businessCategory: {
+            contains: search as string,
+            mode: "insensitive",
+          },
+        },
+        {
+          user: {
+            email: {
+              contains: search as string,
+              mode: "insensitive",
+            },
+          },
+        },
+        {
+          user: {
+            name: {
+              contains: search as string,
+              mode: "insensitive",
+            },
+          },
+        },
+      ];
+    }
+
+    // Validate sort fields
+    const validSortFields = [
+      "createdAt",
+      "updatedAt",
+      "businessName",
+      "city",
+      "country",
+      "isVerified",
+      "verifiedAt",
+      "giftCardLimit",
+    ];
+    const orderByField = validSortFields.includes(sortBy as string) ? sortBy as string : "createdAt";
+    const order = sortOrder === "asc" ? "asc" : "desc";
+
+    const orderBy: any = { [orderByField]: order };
 
     const countWhereClause: any = { ...whereClause };
     delete countWhereClause.profileStatus;
 
-    const statusCounts = await prisma.merchantProfile.groupBy({
-      by: ["profileStatus"],
-      where: countWhereClause,
-      _count: {
-        profileStatus: true,
-      },
-    });
+    const [merchants, total, statusCounts] = await Promise.all([
+      prisma.merchantProfile.findMany({
+        where: whereClause,
+        skip,
+        take: limit,
+        include: {
+          user: {
+            select: {
+              id: true,
+              email: true,
+              name: true,
+              phone: true,
+              createdAt: true,
+              isActive: true,
+            },
+          },
+        },
+        orderBy,
+      }),
+
+      prisma.merchantProfile.count({
+        where: whereClause,
+      }),
+
+      prisma.merchantProfile.groupBy({
+        by: ["profileStatus"],
+        where: countWhereClause,
+        _count: {
+          profileStatus: true,
+        },
+      }),
+    ]);
 
     const counts = {
       PENDING_VERIFICATION: 0,
@@ -1023,13 +1172,28 @@ export const getAllMerchants = async (req: Request, res: Response) => {
       counts[item.profileStatus] = item._count.profileStatus;
     });
 
-    return res.status(StatusCodes.OK).json(successResponse("Merchants fetched successfully.", {
-        count: merchants.length,
-        statusCounts: counts,
+    return res.status(StatusCodes.OK).json(
+      successResponse("Merchants fetched successfully.", {
         merchants,
-      }));
+        pagination: {
+          total,
+          page,
+          limit,
+          totalPages: Math.ceil(total / limit),
+        },
+        filters: {
+          search: search || null,
+          sortBy: orderByField,
+          sortOrder: order,
+          profileStatus: profileStatus || null,
+          active: active || null,
+        },
+        statusCounts: counts,
+      })
+    );
   } catch (error: any) {
     console.error("Get all merchants error:", error);
+
     return res.status(StatusCodes.INTERNAL_SERVER_ERROR).json({
       success: false,
       message: "Error fetching merchants",
@@ -1037,6 +1201,8 @@ export const getAllMerchants = async (req: Request, res: Response) => {
     });
   }
 };
+
+
 
 export const getMerchantById = async (req: Request, res: Response) => {
   try {
@@ -1274,66 +1440,289 @@ export const updateMerchantData = async (req: Request, res: Response, next: Next
 }
 
 
-export const getGiftCardByMerchant = async (req: Request, res: Response, next: NextFunction) => {
+export const getGiftCardByMerchant = async (
+  req: Request,
+  res: Response,
+  next: NextFunction
+) => {
   try {
-    const { merchantId } = req.params; 
-    const giftCards = await prisma.giftCard.findMany({
-      where:{
-        merchantId: merchantId
-      }
+    const { merchantId } = req.params;
+    const { search, sortBy = "createdAt", sortOrder = "desc" } = req.query;
+
+    // Pagination params
+    const page = Math.max(parseInt(req.query.page as string) || 1, 1);
+    const limit = Math.max(parseInt(req.query.limit as string) || 10, 1);
+    const skip = (page - 1) * limit;
+
+    const merchant = await prisma.merchantProfile.findFirst({
+      where: {
+        userId: merchantId,
+      },
     });
 
-    if (!giftCards){
-      return res.status(StatusCodes.NOT_FOUND).json(errorResponse("No gift cards have been issued by this merchant yet."))
+    if (!merchant) {
+      return res
+        .status(StatusCodes.NOT_FOUND)
+        .json(errorResponse("Merchant not found."));
     }
 
-    const merchant=  await prisma.merchantProfile.findFirst({
-      where:{
-        userId: merchantId
-      }
-    });
+    const whereClause: any = {
+      merchantId,
+    };
 
-    const setting = await prisma.settings.findFirst({
-      where:{
-        merchantId: merchant?.id
-      }
-    });
-    
-    if (!setting){
-      return res.status(StatusCodes.NOT_FOUND).json(errorResponse("Settings has not been implemented by merchant."))
+    // Add search filter if provided
+    if (search) {
+      whereClause.OR = [
+        {
+          title: {
+            contains: search as string,
+            mode: "insensitive",
+          },
+        },
+        {
+          description: {
+            contains: search as string,
+            mode: "insensitive",
+          },
+        },
+      ];
     }
 
-    return res.status(StatusCodes.OK).json(errorResponse("Gift cards fetched successfully.", { giftCards, setting}));
+    // Validate and set orderBy
+    const validSortFields = ["price", "createdAt", "updatedAt", "expiryDate", "title", "isActive", "status"];
+    const orderByField = validSortFields.includes(sortBy as string) ? sortBy as string : "createdAt";
+    const order = sortOrder === "asc" ? "asc" : "desc";
+    const orderBy: any = { [orderByField]: order };
 
-    
+    const [giftCards, total, setting] = await Promise.all([
+      prisma.giftCard.findMany({
+        where: whereClause,
+        skip,
+        take: limit,
+        orderBy,
+      }),
+      prisma.giftCard.count({
+        where: whereClause,
+      }),
+      prisma.settings.findFirst({
+        where: {
+          merchantId: merchant.id,
+        },
+      }),
+    ]);
+
+    if (!setting) {
+      return res
+        .status(StatusCodes.NOT_FOUND)
+        .json(
+          errorResponse("Settings have not been implemented by merchant.")
+        );
+    }
+
+    return res.status(StatusCodes.OK).json(
+      successResponse("Gift cards fetched successfully.", {
+        giftCards,
+        setting,
+        pagination: {
+          total,
+          page,
+          limit,
+          totalPages: Math.ceil(total / limit),
+        },
+        filters: {
+          search: search || null,
+          sortBy: orderByField,
+          sortOrder: order,
+        },
+      })
+    );
   } catch (error: any) {
+    console.error("Get gift cards by merchant error:", error);
+
     return res.status(StatusCodes.INTERNAL_SERVER_ERROR).json({
       success: false,
       message: "Error fetching gift cards",
-      error: error.message
-    })
-  }
-}
-
-export const getVerifiedMerchants = async (req: Request, res: Response, next: NextFunction) => {
-  try {
-    const merchant = await prisma.merchantProfile.findMany({
-      where:{
-        profileStatus: "VERIFIED"
-      }
+      error: error.message,
     });
-    if (!merchant){
-      return res.status(StatusCodes.NOT_FOUND).json(errorResponse("Merchants not found"));
+  }
+};
+
+
+
+export const getVerifiedMerchants = async (
+  req: Request,
+  res: Response,
+  next: NextFunction
+) => {
+  try {
+    const { search, sortBy = "createdAt", sortOrder = "desc" } = req.query;
+
+    // Pagination params
+    const page = Math.max(parseInt(req.query.page as string) || 1, 1);
+    const limit = Math.max(parseInt(req.query.limit as string) || 10, 1);
+    const skip = (page - 1) * limit;
+
+    const whereClause: any = {
+      profileStatus: "VERIFIED",
+    };
+
+    // Add search filter if provided
+    if (search) {
+      whereClause.OR = [
+        {
+          businessName: {
+            contains: search as string,
+            mode: "insensitive",
+          },
+        },
+        {
+          businessEmail: {
+            contains: search as string,
+            mode: "insensitive",
+          },
+        },
+        {
+          businessType: {
+            contains: search as string,
+            mode: "insensitive",
+          },
+        },
+        {
+          businessCategory: {
+            contains: search as string,
+            mode: "insensitive",
+          },
+        },
+        {
+          city: {
+            contains: search as string,
+            mode: "insensitive",
+          },
+        },
+        {
+          state: {
+            contains: search as string,
+            mode: "insensitive",
+          },
+        },
+        {
+          country: {
+            contains: search as string,
+            mode: "insensitive",
+          },
+        },
+        {
+          description: {
+            contains: search as string,
+            mode: "insensitive",
+          },
+        },
+        {
+          user: {
+            name: {
+              contains: search as string,
+              mode: "insensitive",
+            },
+          },
+        },
+        {
+          user: {
+            email: {
+              contains: search as string,
+              mode: "insensitive",
+            },
+          },
+        },
+      ];
     }
-    return res.status(StatusCodes.OK).json(successResponse("Merchants fetched successfully", merchant));
+
+    // Validate sort fields
+    const validSortFields = [
+      "createdAt",
+      "updatedAt",
+      "businessName",
+      "city",
+      "state",
+      "country",
+      "verifiedAt",
+      "giftCardLimit",
+    ];
+    const orderByField = validSortFields.includes(sortBy as string)
+      ? (sortBy as string)
+      : "createdAt";
+    const order = sortOrder === "asc" ? "asc" : "desc";
+
+    const orderBy: any = { [orderByField]: order };
+
+    const [merchants, total, activeCount] = await Promise.all([
+      prisma.merchantProfile.findMany({
+        where: whereClause,
+        skip,
+        take: limit,
+        orderBy,
+        include: {
+          user: {
+            select: {
+              id: true,
+              email: true,
+              name: true,
+              phone: true,
+              isActive: true,
+              createdAt: true,
+            },
+          },
+          _count: {
+            select: {
+              supportTicket: true,
+            },
+          },
+        },
+      }),
+      prisma.merchantProfile.count({
+        where: whereClause,
+      }),
+      prisma.merchantProfile.count({
+        where: {
+          profileStatus: "VERIFIED",
+          user: {
+            isActive: true,
+          },
+        },
+      }),
+    ]);
+
+    return res.status(StatusCodes.OK).json(
+      successResponse("Verified merchants fetched successfully", {
+        merchants,
+        pagination: {
+          total,
+          page,
+          limit,
+          totalPages: Math.ceil(total / limit),
+        },
+        filters: {
+          search: search || null,
+          sortBy: orderByField,
+          sortOrder: order,
+        },
+        stats: {
+          totalVerified: total,
+          activeVerified: activeCount,
+          inactiveVerified: total - activeCount,
+        },
+      })
+    );
   } catch (error: any) {
+    console.error("Get verified merchants error:", error);
+
     return res.status(StatusCodes.INTERNAL_SERVER_ERROR).json({
       success: false,
       message: "Error fetching verified merchants",
-      error: error.message
-    })
+      error: error.message,
+    });
   }
-}
+};
+
 
 
 
@@ -1809,61 +2198,126 @@ export const createSupportTicket = async (req: Request, res: Response, next: Nex
   }
 }
 
-export const getAllSupportTickets = async (req:Request, res: Response, next: NextFunction) => {
+export const getAllSupportTickets = async (
+  req: Request,
+  res: Response,
+  next: NextFunction
+) => {
   try {
+    const {
+      search,
+      sortBy = "createdAt",
+      sortOrder = "desc",
+    } = req.query;
 
-    const { search, sortBy= "createdAt", order = "desc" } = req.query;
+    // Pagination params
+    const page = Math.max(parseInt(req.query.page as string) || 1, 1);
+    const limit = Math.max(parseInt(req.query.limit as string) || 10, 1);
+    const skip = (page - 1) * limit;
 
-    const supportTickets = await prisma.supportTicket.findMany({
-      where: search 
+    const whereClause: any = search
       ? {
-        OR: [
-          {
-            title: {
-              contains: String(search),
-              mode: "insensitive"
+          OR: [
+            {
+              title: {
+                contains: String(search),
+                mode: "insensitive" as const,
+              },
             },
-          },
-          {
-            merchant: {
-              user: {
-                name: {
+            {
+              merchant: {
+                businessName: {
                   contains: String(search),
-                  mode: "insensitive",
+                  mode: "insensitive" as const,
                 },
               },
             },
-          },
-          {
-            merchant: {
-              user: {
-                email: {
-                  contains: String(search),
-                  mode: "insensitive",
+            {
+              merchant: {
+                user: {
+                  name: {
+                    contains: String(search),
+                    mode: "insensitive" as const,
+                  },
                 },
               },
             },
-          },
-        ],
+            {
+              merchant: {
+                user: {
+                  email: {
+                    contains: String(search),
+                    mode: "insensitive" as const,
+                  },
+                },
+              },
+            },
+          ],
+        }
+      : {};
 
-      }: undefined,
-      orderBy :{ 
-        createadAt: order === "asc" ? "asc" : "desc"
-      }
-    });
-    if (!supportTickets){
-      return res.status(StatusCodes.BAD_REQUEST).json(errorResponse("Couldn't fetch support tickets."));
-    }
-    return res.status(StatusCodes.OK).json(successResponse("Fetched support tickets successfully.", {count: supportTickets.length,
-      data: supportTickets}));
+    // Allow only safe sortable fields
+    const allowedSortFields = ["createdAt", "updatedAt", "status", "priority", "title"];
+    const sortField = allowedSortFields.includes(sortBy as string)
+      ? (sortBy as string)
+      : "createdAt";
+    const order = sortOrder === "asc" ? "asc" : "desc";
+
+    const [supportTickets, total] = await Promise.all([
+      prisma.supportTicket.findMany({
+        where: whereClause,
+        skip,
+        take: limit,
+        orderBy: {
+          [sortField]: order,
+        },
+        include: {
+          merchant: {
+            select: {
+              id: true,
+              businessName: true,
+              user: {
+                select: {
+                  id: true,
+                  name: true,
+                  email: true,
+                },
+              },
+            },
+          },
+        },
+      }),
+      prisma.supportTicket.count({
+        where: whereClause,
+      }),
+    ]);
+
+    return res.status(StatusCodes.OK).json(
+      successResponse("Fetched support tickets successfully.", {
+        data: supportTickets,
+        pagination: {
+          total,
+          page,
+          limit,
+          totalPages: Math.ceil(total / limit),
+        },
+        filters: {
+          search: search || null,
+          sortBy: sortField,
+          sortOrder: order,
+        },
+      })
+    );
   } catch (error: any) {
+    console.error("Get all support tickets error:", error);
     return res.status(StatusCodes.INTERNAL_SERVER_ERROR).json({
       success: false,
       message: "Error fetching support tickets",
-      error: error.message
-    })
+      error: error.message,
+    });
   }
-}
+};
+
 
 export const getSupportTicketById = async (req: Request, res: Response, next: NextFunction) => {
   try {
@@ -1926,48 +2380,118 @@ export const updateSupportTicket = async (req: Request, res: Response, next: Nex
 }
 
 
-export const getPurchaseOrders = async (req: Request, res: Response, next: NextFunction) => {
+export const getPurchaseOrders = async (
+  req: Request,
+  res: Response,
+  next: NextFunction
+) => {
   try {
     const userId = req.authUser?.userId;
-    const { search, order } = req.query;
+    const { search, sortBy = "purchasedAt", sortOrder = "desc" } = req.query;
+
+    // Pagination params
+    const page = Math.max(parseInt(req.query.page as string) || 1, 1);
+    const limit = Math.max(parseInt(req.query.limit as string) || 10, 1);
+    const skip = (page - 1) * limit;
+
     const merchant = await prisma.merchantProfile.findUnique({
-      where:{
-        userId: userId
-      }
+      where: {
+        userId: userId,
+      },
     });
-    if (!merchant){
-      return res.status(StatusCodes.BAD_REQUEST).json(errorResponse("Merchant not found with given id"));
+
+    if (!merchant) {
+      return res
+        .status(StatusCodes.BAD_REQUEST)
+        .json(errorResponse("Merchant not found with given id"));
     }
 
-    const orders = await prisma.purchasedGiftCard.findMany({
-      where: {
-        giftCard: {
-          merchantId: userId
-        },
-        ...(search && {
-          OR: [
-            {
-              customerName: {
-                contains: String(search),
-                mode: "insensitive"
-              }
-            },
-            {
-              customerEmail: {
-                contains: String(search),
-                mode: "insensitive"
-              }
-            }
-          ]
-        })
+    const whereClause: any = {
+      giftCard: {
+        merchantId: userId,
       },
-      orderBy: {
-        purchasedAt: order === "asc" ? "asc" : "desc"
-      }
-    });
-    return res.status(StatusCodes.OK).json(successResponse("Purchased orders fetched successfully.", orders));
+    };
 
+    if (search) {
+      whereClause.OR = [
+        {
+          customerName: {
+            contains: String(search),
+            mode: "insensitive" as const,
+          },
+        },
+        {
+          customerEmail: {
+            contains: String(search),
+            mode: "insensitive" as const,
+          },
+        },
+        {
+          giftCard: {
+            title: {
+              contains: String(search),
+              mode: "insensitive" as const,
+            },
+          },
+        },
+      ];
+    }
+
+    // Validate sort fields
+    const validSortFields = [
+      "purchasedAt",
+      "redeemedAt",
+      "price",
+      "customerName",
+      "status",
+    ];
+    const orderByField = validSortFields.includes(sortBy as string)
+      ? (sortBy as string)
+      : "purchasedAt";
+    const order = sortOrder === "asc" ? "asc" : "desc";
+
+    const [orders, total] = await Promise.all([
+      prisma.purchasedGiftCard.findMany({
+        where: whereClause,
+        skip,
+        take: limit,
+        orderBy: {
+          [orderByField]: order,
+        },
+        include: {
+          giftCard: {
+            select: {
+              id: true,
+              title: true,
+              price: true,
+            },
+          },
+        },
+      }),
+      prisma.purchasedGiftCard.count({
+        where: whereClause,
+      }),
+    ]);
+
+    return res.status(StatusCodes.OK).json(
+      successResponse("Purchased orders fetched successfully.", {
+        data: orders,
+        pagination: {
+          total,
+          page,
+          limit,
+          totalPages: Math.ceil(total / limit),
+        },
+        filters: {
+          search: search || null,
+          sortBy: orderByField,
+          sortOrder: order,
+        },
+      })
+    );
   } catch (error: any) {
-      return res.status(StatusCodes.INTERNAL_SERVER_ERROR).json(error("Internal Server error", error.message));
+    return res
+      .status(StatusCodes.INTERNAL_SERVER_ERROR)
+      .json(error("Internal Server error", error.message));
   }
-}
+};

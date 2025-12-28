@@ -544,74 +544,176 @@ export const getRedemptionHistory = async (req: Request, res: Response) => {
       return res.status(StatusCodes.UNAUTHORIZED).json(errorResponse("Unauthorized"));
     }
 
-    // Get query params for pagination
-    const page = parseInt(req.query.page as string) || 1;
-    const limit = parseInt(req.query.limit as string) || 50;
+    // Get query params for pagination, search, and sorting
+    const page = Math.max(parseInt(req.query.page as string) || 1, 1);
+    const limit = Math.max(parseInt(req.query.limit as string) || 50, 1);
     const skip = (page - 1) * limit;
+    const { search, sortBy = "redeemedAt", sortOrder = "desc" } = req.query;
 
-    const [redemptions, total] = await Promise.all([
-      prisma.redemption.findMany({
-        where: {
+    // Extended sortable fields based on Redemption model
+    const allowedSortFields = [
+      "redeemedAt",
+      "amount",
+      "balanceBefore",
+      "balanceAfter",
+      "locationName",
+    ];
+    const sortField = allowedSortFields.includes(sortBy as string)
+      ? (sortBy as string)
+      : "redeemedAt";
+    const order = sortOrder === "asc" ? "asc" : "desc";
+
+    const whereClause: any = {
+      purchasedGiftCard: {
+        giftCard: {
+          merchantId,
+        },
+      },
+    };
+
+    // Enhanced search across multiple fields
+    if (search) {
+      whereClause.OR = [
+        {
           purchasedGiftCard: {
-            giftCard: {
-              merchantId,
+            customerName: {
+              contains: String(search),
+              mode: "insensitive" as const,
             },
           },
         },
+        {
+          purchasedGiftCard: {
+            customerEmail: {
+              contains: String(search),
+              mode: "insensitive" as const,
+            },
+          },
+        },
+        {
+          redeemedBy: {
+            name: {
+              contains: String(search),
+              mode: "insensitive" as const,
+            },
+          },
+        },
+        {
+          redeemedBy: {
+            email: {
+              contains: String(search),
+              mode: "insensitive" as const,
+            },
+          },
+        },
+        {
+          purchasedGiftCard: {
+            giftCard: {
+              title: {
+                contains: String(search),
+                mode: "insensitive" as const,
+              },
+            },
+          },
+        },
+        {
+          locationName: {
+            contains: String(search),
+            mode: "insensitive" as const,
+          },
+        },
+        {
+          locationAddress: {
+            contains: String(search),
+            mode: "insensitive" as const,
+          },
+        },
+        {
+          notes: {
+            contains: String(search),
+            mode: "insensitive" as const,
+          },
+        },
+      ];
+    }
+
+    const [redemptions, total] = await Promise.all([
+      prisma.redemption.findMany({
+        where: whereClause,
         include: {
           purchasedGiftCard: {
             include: {
               giftCard: {
                 select: {
+                  id: true,
                   title: true,
                   price: true,
+                  description: true,
                 },
               },
             },
           },
           redeemedBy: {
             select: {
+              id: true,
               name: true,
               email: true,
             },
           },
         },
-        orderBy: { redeemedAt: "desc" },
+        orderBy: {
+          [sortField]: order,
+        },
         take: limit,
         skip,
       }),
       prisma.redemption.count({
-        where: {
-          purchasedGiftCard: {
-            giftCard: {
-              merchantId,
-            },
-          },
-        },
+        where: whereClause,
       }),
     ]);
 
-    // Calculate total revenue from redemptions
+    // Calculate comprehensive statistics
     const totalRevenue = redemptions.reduce(
       (sum, r) => sum + r.amount.toNumber(),
-      0,
+      0
     );
 
-    return res.status(StatusCodes.OK).json(successResponse("Redemptions history fetched successfully.", {
-        redemptions,
+    const averageRedemption = total > 0 ? totalRevenue / total : 0;
+
+    return res.status(StatusCodes.OK).json(
+      successResponse("Redemptions history fetched successfully.", {
+        data: redemptions,
         pagination: {
           total,
           page,
           limit,
           totalPages: Math.ceil(total / limit),
         },
+        filters: {
+          search: search || null,
+          sortBy: sortField,
+          sortOrder: order,
+        },
         stats: {
           totalRedemptions: total,
           totalRevenue: totalRevenue.toFixed(2),
+          averageRedemption: averageRedemption.toFixed(2),
+          pageRedemptions: redemptions.length,
+          pageRevenue: redemptions
+            .reduce((sum, r) => sum + r.amount.toNumber(), 0)
+            .toFixed(2),
         },
-      }));
+      })
+    );
   } catch (error: any) {
-    return res.status(StatusCodes.INTERNAL_SERVER_ERROR).json(error("Internal Server error", error.message));
+    console.error("Get redemption history error:", error);
+    return res
+      .status(StatusCodes.INTERNAL_SERVER_ERROR)
+      .json({
+        success: false,
+        message: "Internal Server error",
+        error: error.message,
+      });
   }
 };
 

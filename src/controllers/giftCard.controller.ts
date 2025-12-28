@@ -132,65 +132,126 @@ export const getMyGiftCards = async (req: Request, res: Response) => {
     const merchantId = authReq.authUser?.userId;
 
     if (!merchantId) {
-      return res.status(StatusCodes.UNAUTHORIZED).json(errorResponse("Unauthorized"));
+      return res
+        .status(StatusCodes.UNAUTHORIZED)
+        .json(errorResponse("Unauthorized"));
     }
+
     const merchant = await prisma.merchantProfile.findUnique({
-      where:{
-        userId: merchantId
+      where: {
+        userId: merchantId,
       },
-      include:{
-        settings: true
-      }
+      include: {
+        settings: true,
+      },
     });
 
-    if (!merchant){
-      return res.status(StatusCodes.NOT_FOUND).json(errorResponse("Merchant not found with given Id."))
+    if (!merchant) {
+      return res
+        .status(StatusCodes.NOT_FOUND)
+        .json(errorResponse("Merchant not found with given Id."));
     }
 
-    const giftCards = await prisma.giftCard.findMany({
-      where: { merchantId },
-      orderBy: { createdAt: 'desc' },
-      include: {
-        merchant: {
-          select: {
-            id: true,
-            name: true,
-            merchantProfile: {
-              select: {
-                businessName: true,
+    // Pagination params
+    const page = Math.max(parseInt(req.query.page as string) || 1, 1);
+    const limit = Math.max(parseInt(req.query.limit as string) || 10, 1);
+    const skip = (page - 1) * limit;
+
+    // Search parameter
+    const search = req.query.search as string;
+
+    // Sort parameters
+    const sortBy = (req.query.sortBy as string) || 'createdAt';
+    const sortOrder = (req.query.sortOrder as string) === 'asc' ? 'asc' : 'desc';
+    console.log(sortBy);
+    console.log(sortOrder);
+    const whereClause: any = { merchantId };
+
+    // Add search filter if provided
+    if (search) {
+      whereClause.title = {
+        contains: search,
+        mode: 'insensitive', // Case-insensitive search
+      };
+    }
+
+    // Validate and set orderBy
+    const validSortFields = ['price', 'createdAt', 'expiryDate', 'title'];
+    const orderByField = validSortFields.includes(sortBy) ? sortBy : 'createdAt';
+    const orderBy: any = { [orderByField]: sortOrder };
+
+    const [
+      giftCards,
+      total,
+      activeCardsCount,
+    ] = await Promise.all([
+      prisma.giftCard.findMany({
+        where: whereClause,
+        skip,
+        take: limit,
+        orderBy,
+        include: {
+          merchant: {
+            select: {
+              id: true,
+              name: true,
+              merchantProfile: {
+                select: {
+                  businessName: true,
+                },
               },
             },
           },
-        },
-        _count: {
-          select: {
-            purchases: true, // Count how many times this card was purchased
+          _count: {
+            select: {
+              purchases: true,
+            },
           },
         },
-      },
-    });
+      }),
+      prisma.giftCard.count({
+        where: whereClause,
+      }),
+      prisma.giftCard.count({
+        where: {
+          merchantId,
+          isActive: true,
+        },
+      }),
+    ]);
 
-    // Count only active cards for limit calculation
-    const activeCardsCount = giftCards.filter(card => card.isActive).length;
-
-    return res.status(StatusCodes.OK).json(successResponse("Gift cards fetched successfully.", { 
+    return res.status(StatusCodes.OK).json(
+      successResponse("Gift cards fetched successfully.", {
         giftCards,
         settings: merchant.settings,
-        total: giftCards.length,
+        pagination: {
+          total,
+          page,
+          limit,
+          totalPages: Math.ceil(total / limit),
+        },
+        filters: {
+          search: search || null,
+          sortBy: orderByField,
+          sortOrder,
+        },
         activeCards: activeCardsCount,
-        limit: merchant.giftCardLimit,
+        limitAllowed: merchant.giftCardLimit,
         remaining: Math.max(0, merchant.giftCardLimit - activeCardsCount),
-      }));
+      })
+    );
   } catch (error: any) {
-    console.error('Get gift cards error:', error);
+    console.error("Get gift cards error:", error);
 
     return res.status(StatusCodes.INTERNAL_SERVER_ERROR).json({
       success: false,
-      message: 'Internal server error',
+      message: "Internal server error",
       error: error.message,
     });
   }
 };
+
+
 
 /**
  * Get a single gift card by ID
@@ -485,48 +546,95 @@ export const deleteGiftCard = async (req: Request, res: Response) => {
  * @route GET /api/gift-cards/public/active
  * @access Public
  */
+
 export const getActiveGiftCards = async (req: Request, res: Response) => {
   try {
-    const giftCards = await prisma.giftCard.findMany({
-      where: {
-        isActive: true,
-        expiryDate: {
-          gt: new Date(), // Only non-expired cards
-        },
+    const page = Math.max(parseInt(req.query.page as string) || 1, 1);
+    const limit = Math.max(parseInt(req.query.limit as string) || 10, 1);
+    const skip = (page - 1) * limit;
+
+    // Search parameter
+    const search = req.query.search as string;
+
+    // Sort parameters
+    const sortBy = (req.query.sortBy as string) || 'createdAt';
+    const sortOrder = (req.query.sortOrder as string) === 'asc' ? 'asc' : 'desc';
+
+    const whereClause: any = {
+      isActive: true,
+      expiryDate: {
+        gt: new Date(), // Only non-expired cards
       },
-      orderBy: { createdAt: 'desc' },
-      include: {
-        merchant: {
-          select: {
-            id: true,
-            name: true,
-            merchantProfile: {
-              select: {
-                businessName: true,
-                logo: true,
-                city: true,
-                country: true,
+    };
+
+    // Add search filter if provided
+    if (search) {
+      whereClause.title = {
+        contains: search,
+        mode: 'insensitive', // Case-insensitive search
+      };
+    }
+
+    // Validate and set orderBy
+    const validSortFields = ['price', 'createdAt', 'expiryDate', 'title'];
+    const orderByField = validSortFields.includes(sortBy) ? sortBy : 'createdAt';
+    const orderBy: any = { [orderByField]: sortOrder };
+
+    const [giftCards, total] = await Promise.all([
+      prisma.giftCard.findMany({
+        where: whereClause,
+        skip,
+        take: limit,
+        orderBy,
+        include: {
+          merchant: {
+            select: {
+              id: true,
+              name: true,
+              merchantProfile: {
+                select: {
+                  businessName: true,
+                  logo: true,
+                  city: true,
+                  country: true,
+                },
               },
             },
           },
         },
-      },
-    });
+      }),
+      prisma.giftCard.count({
+        where: whereClause,
+      }),
+    ]);
 
-    return res.status(StatusCodes.OK).json(successResponse("Active gift cards fetched successfully.", { 
+    return res.status(StatusCodes.OK).json(
+      successResponse("Active gift cards fetched successfully.", {
         giftCards,
-        total: giftCards.length,
-      }));
+        pagination: {
+          total,
+          page,
+          limit,
+          totalPages: Math.ceil(total / limit),
+        },
+        filters: {
+          search: search || null,
+          sortBy: orderByField,
+          sortOrder,
+        },
+      })
+    );
   } catch (error: any) {
-    console.error('Get active gift cards error:', error);
+    console.error("Get active gift cards error:", error);
 
     return res.status(StatusCodes.INTERNAL_SERVER_ERROR).json({
       success: false,
-      message: 'Internal server error',
+      message: "Internal server error",
       error: error.message,
     });
   }
 };
+
 
 export const createSettings = async (req:Request, res: Response) => {
   try {

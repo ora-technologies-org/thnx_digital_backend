@@ -295,7 +295,7 @@ model SupportTicket{
   adminResponse      String?
 
   status             Status @default(OPEN)
-  createadAt DateTime @default(now())
+  createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 }
 
