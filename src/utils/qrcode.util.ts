@@ -17,7 +17,9 @@ export const generateQRCodeString = (): string => {
 export const generateQRCodeImage = async (qrCodeId: string): Promise<string> => {
   try {
     // Create a verification URL that includes the QR code
-    const verificationUrl = `${process.env.APP_URL || 'https://thnxdigital.com'}/verify/${qrCodeId}`;
+    // const verificationUrl = `${process.env.APP_URL || 'https://thnxdigital.com'}/verify/${qrCodeId}`;
+    const verificationUrl = `${process.env.APP_URL || 'https://rncks4z6-8081.inc1.devtunnels.ms/merchant/scan'}/${qrCodeId}`;
+    console.log(verificationUrl);
     
     const qrCodeDataURL = await QRCode.toDataURL(verificationUrl, {
       width: 400,
