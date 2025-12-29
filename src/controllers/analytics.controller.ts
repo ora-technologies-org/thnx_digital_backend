@@ -114,8 +114,6 @@ export const getAdminDashboardStats = async (req: Request, res: Response) => {
       rejected: verificationStatus.find(v => v.profileStatus === 'REJECTED')?._count || 0
     };
 
-    console.log(verificationStats);
-
     // Active Customers (unique customers who purchased in time range)
     const activeCustomers = await prisma.purchasedGiftCard.groupBy({
       by: ['customerEmail'],

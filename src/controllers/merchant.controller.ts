@@ -1511,14 +1511,6 @@ export const getGiftCardByMerchant = async (
       }),
     ]);
 
-    if (!setting) {
-      return res
-        .status(StatusCodes.NOT_FOUND)
-        .json(
-          errorResponse("Settings have not been implemented by merchant.")
-        );
-    }
-
     return res.status(StatusCodes.OK).json(
       successResponse("Gift cards fetched successfully.", {
         giftCards,
