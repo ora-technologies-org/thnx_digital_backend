@@ -899,6 +899,31 @@ export const verifyOtp = async (req: Request, res: Response, next: NextFunction)
     return res.status(StatusCodes.OK).json(successResponse("OTP verified successfully"))
 
   } catch (error: any) {
-    return res.status(StatusCodes.INTERNAL_SERVER_ERROR).json(error("Internal Server error", error.message));
+    return res.status(StatusCodes.INTERNAL_SERVER_ERROR).json(errorResponse("Internal Server error", error.message));
+  }
+}
+
+export const qrRedemptionHistory = async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const { qrCode } = req.body;
+    if (!qrCode){
+      return res.status(StatusCodes.BAD_REQUEST).json(errorResponse("QR Code is required to fetch redemption history."));
+    }
+    const giftCard = await prisma.purchasedGiftCard.findUnique({
+      where:{
+        qrCode: qrCode
+      }
+    });
+    if (!giftCard){
+      return res.status(StatusCodes.NOT_FOUND).json(errorResponse("No GiftCard purchased with given qrCode."));
+    }
+    const redemption = await prisma.redemption.findMany({
+      where:{
+        purchasedGiftCardId: giftCard.id
+      }
+    });
+    return res.status(StatusCodes.OK).json(successResponse("Redemption history fetched successfully", redemption));
+  } catch (error:any) {
+    return res.status(StatusCodes.INTERNAL_SERVER_ERROR).json(errorResponse("Error fetching redemption history", error.message))
   }
 }
