@@ -26,5 +26,13 @@ export const merchantVerifySchema = z.object({
       .optional(),
   });
 
+
+export const notifyMerchantSchema = z.object({
+    name: z.string().min(2, 'Name must be at least 2 characters'),
+    email: z.string().email('Invalid email address'),
+    merchantId: z.string().uuid("Invalid merchant")
+});
+
+export type notifyMerchantInput = z.infer<typeof notifyMerchantSchema>
 export type createContactInput = z.infer<typeof createContactUsSchema>; 
 export type merchantVerifyInput = z.infer<typeof merchantVerifySchema>;
