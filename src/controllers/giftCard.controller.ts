@@ -130,12 +130,12 @@ export const getMyGiftCards = async (req: Request, res: Response) => {
   try {
     const authReq = req as AuthenticatedRequest;
     const merchantId = authReq.authUser?.userId;
-
     if (!merchantId) {
       return res
         .status(StatusCodes.UNAUTHORIZED)
         .json(errorResponse("Unauthorized"));
     }
+    console.log("asninasidnasidniasd asndiona sdon a noians doiansdoina doin")
 
     const merchant = await prisma.merchantProfile.findUnique({
       where: {
@@ -180,10 +180,19 @@ export const getMyGiftCards = async (req: Request, res: Response) => {
     const orderByField = validSortFields.includes(sortBy) ? sortBy : 'createdAt';
     const orderBy: any = { [orderByField]: sortOrder };
 
+    //expiry date
+
+    const today = new Date();
+    const expiryIn30Days = new Date();
+    expiryIn30Days.setDate(today.getDate() + 30);
+
+
     const [
       giftCards,
       total,
       activeCardsCount,
+      totalValue,
+      expiringSoon
     ] = await Promise.all([
       prisma.giftCard.findMany({
         where: whereClause,
@@ -215,9 +224,31 @@ export const getMyGiftCards = async (req: Request, res: Response) => {
       prisma.giftCard.count({
         where: {
           merchantId,
-          isActive: true,
+          status: 'ACTIVE',
         },
       }),
+      prisma.giftCard.aggregate({
+        where:{
+          merchantId
+        },_sum:{
+          price: true
+        }
+      }),
+      prisma.giftCard.findMany({
+        where: {
+          merchantId,
+          expiryDate: {
+            gte: today,
+            lte: expiryIn30Days,
+          },
+          status: 'ACTIVE',
+        },
+        orderBy: {
+          expiryDate: 'asc',
+        },
+        take: 10, // optional: limit to top 10 soonest expiring
+      }),
+
     ]);
 
     return res.status(StatusCodes.OK).json(
@@ -235,7 +266,10 @@ export const getMyGiftCards = async (req: Request, res: Response) => {
           sortBy: orderByField,
           sortOrder,
         },
+        totalGiftCards: giftCards.length,
         activeCards: activeCardsCount,
+        totalValue: totalValue._sum.price,
+        expiringSoon:expiringSoon.length,
         limitAllowed: merchant.giftCardLimit,
         remaining: Math.max(0, merchant.giftCardLimit - activeCardsCount),
       })
