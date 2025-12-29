@@ -2315,10 +2315,32 @@ export const getSupportTicketById = async (req: Request, res: Response, next: Ne
   try {
     const { ticketId } = req.params;
     const supportTicket = await prisma.supportTicket.findFirst({
-      where:{
-        id: ticketId
-      }
+      where: {
+        id: ticketId,
+      },
+      select: {
+        id: true,
+        title: true,
+        merchantQuery:true,
+        adminResponse:true,
+        status:true,
+        createdAt:true,
+        updatedAt:true,
+        merchant: {
+          select: {
+            businessName: true,
+            businessEmail: true,
+            user: {
+              select: {
+                name: true,
+                email: true,
+              },
+            },
+          },
+        },
+      },
     });
+
     if (!ticketId){
       return res.status(StatusCodes.NOT_FOUND).json(errorResponse("No support ticket found with given id."))
     }
