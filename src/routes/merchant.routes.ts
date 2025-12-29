@@ -31,6 +31,7 @@ import { updateProfile } from "../controllers/admin.controller";
 import { validate } from "../middleware/validation.middleware";
 import { adminCreateMerchantSchema } from "../validators/auth.validator";
 import { merchantVerifySchema } from "../validators/user.validator";
+import { getMerchantDashboardStats } from "../controllers/analytics.controller";
 
 const router = express.Router();
 
@@ -547,4 +548,5 @@ router.put("/support-ticket/:ticketId", authenticate, authorize("ADMIN"), update
 router.get("/orders", authenticate, authorize("MERCHANT"), getPurchaseOrders);
 
 router.put("/update/profile", authenticate, authorize("MERCHANT"), updateProfile)
+router.get("/dashboard", authenticate, authorize("MERCHANT"), getMerchantDashboardStats)
 export default router;

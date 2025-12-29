@@ -2,7 +2,7 @@
 import { Request, Response } from 'express';
 import { PrismaClient } from '@prisma/client';
 import { StatusCodes } from '../utils/statusCodes';
-import { successResponse } from '../utils/response';
+import { errorResponse, successResponse } from '../utils/response';
 
 const prisma = new PrismaClient();
 
@@ -52,7 +52,7 @@ const calculatePercentageChange = (current: number, previous: number): number =>
   return Number(((current - previous) / previous * 100).toFixed(2));
 };
 
-export const getDashboardStats = async (req: Request, res: Response) => {
+export const getAdminDashboardStats = async (req: Request, res: Response) => {
   try {
     const { timeRange = '30d' } = req.query as DashboardQuery;
     const { startDate, endDate } = getDateRange(timeRange);
@@ -113,6 +113,8 @@ export const getDashboardStats = async (req: Request, res: Response) => {
       verified: verificationStatus.find(v => v.profileStatus === 'VERIFIED')?._count || 0,
       rejected: verificationStatus.find(v => v.profileStatus === 'REJECTED')?._count || 0
     };
+
+    console.log(verificationStats);
 
     // Active Customers (unique customers who purchased in time range)
     const activeCustomers = await prisma.purchasedGiftCard.groupBy({
@@ -308,5 +310,80 @@ export const getDashboardStats = async (req: Request, res: Response) => {
   }
 };
 
-// Export route
-export default getDashboardStats;
+
+const startOfMonth = new Date(
+  new Date().getFullYear(),
+  new Date().getMonth(),
+  1
+);
+
+const endOfMonth = new Date(
+  new Date().getFullYear(),
+  new Date().getMonth() + 1,
+  0,
+  23,
+  59,
+  59,
+  999
+);
+
+
+export const getMerchantDashboardStats = async (req: Request, res: Response) =>{
+  try {
+    const userId = req.authUser?.userId;
+
+    const totalSales = await prisma.purchasedGiftCard.aggregate({
+      where:{
+        giftCard:{
+          merchantId: userId
+        }
+      },
+      _sum:{
+        purchaseAmount: true
+      }
+    });
+
+    const activeGiftCardsCount = await prisma.giftCard.count({
+      where: {
+        status: 'ACTIVE',
+      },
+    });
+
+
+    const redemptionStats = await prisma.redemption.aggregate({
+      where: {
+        redeemedAt: {
+          gte: startOfMonth,
+          lte: endOfMonth,
+        },
+        purchasedGiftCard: {
+          giftCard: {
+            merchantId: userId,
+          },
+        },
+      },
+      _count: {
+        _all: true,
+      },
+      _sum: {
+        amount: true, // change if your column name differs
+      },
+    });
+
+
+    const response = {
+      totalSales: totalSales._sum.purchaseAmount,
+      activeGiftCards: activeGiftCardsCount,
+      redemptions: redemptionStats._count._all,
+      revenue: redemptionStats._sum.amount
+    }
+    return res.status(StatusCodes.OK).json(successResponse("Dashboard data fetched successfully", response))
+  } catch (error) {
+    console.error("Merchant dashboard stats error", error);
+    return res.status(StatusCodes.INTERNAL_SERVER_ERROR).json({
+      success: false,
+      message: 'Failed to fetch dashboard statistics',
+      error: error instanceof Error ? error.message : 'Unknown error'
+    })
+  }
+}
