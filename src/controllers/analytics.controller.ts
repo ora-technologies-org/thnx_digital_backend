@@ -1,6 +1,8 @@
 // dashboard.controller.ts
 import { Request, Response } from 'express';
 import { PrismaClient } from '@prisma/client';
+import { StatusCodes } from '../utils/statusCodes';
+import { successResponse } from '../utils/response';
 
 const prisma = new PrismaClient();
 
@@ -294,14 +296,11 @@ export const getDashboardStats = async (req: Request, res: Response) => {
       giftCardStatus: giftCardStatusComplete
     };
 
-    return res.status(200).json({
-      success: true,
-      data: response
-    });
+    return res.status(StatusCodes.OK).json(successResponse("Dashboard data fetched successfully.", response));
 
   } catch (error) {
     console.error('Dashboard stats error:', error);
-    return res.status(500).json({
+    return res.status(StatusCodes.INTERNAL_SERVER_ERROR).json({
       success: false,
       message: 'Failed to fetch dashboard statistics',
       error: error instanceof Error ? error.message : 'Unknown error'
