@@ -343,6 +343,7 @@ export const getMerchantDashboardStats = async (req: Request, res: Response) =>{
 
     const activeGiftCardsCount = await prisma.giftCard.count({
       where: {
+        merchantId: userId,
         status: 'ACTIVE',
       },
     });
@@ -368,12 +369,36 @@ export const getMerchantDashboardStats = async (req: Request, res: Response) =>{
       },
     });
 
+    const avgOrderValue = await prisma.redemption.aggregate({
+      where:{
+        purchasedGiftCard:{
+          giftCard:{
+            merchantId: userId
+          }
+        }
+      },
+      _avg:{
+        amount: true
+      }
+    });
+
+    const customers = await prisma.purchasedGiftCard.findMany({
+      where:{
+        giftCard:{
+          merchantId: userId
+        }
+      },
+      distinct: ['customerEmail']
+    });
+
 
     const response = {
       totalSales: totalSales._sum.purchaseAmount,
       activeGiftCards: activeGiftCardsCount,
       redemptions: redemptionStats._count._all,
-      revenue: redemptionStats._sum.amount
+      revenue: redemptionStats._sum.amount,
+      avgOrderValue: avgOrderValue._avg.amount?.toFixed(2),
+      customersCount: customers.length
     }
     return res.status(StatusCodes.OK).json(successResponse("Dashboard data fetched successfully", response))
   } catch (error) {
