@@ -81,7 +81,6 @@ export const createGiftCard = async (req: Request, res: Response) => {
         description: description,
         price: new Decimal(price),
         expiryDate: new Date(expiryDate),
-        merchantLogo: merchant.businessLogo,
       },
       include: {
         merchant: {
