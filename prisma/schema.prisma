@@ -154,7 +154,8 @@ model MerchantProfile {
 
   //reference
   supportTicket SupportTicket[]
-  settings      Settings[]
+  settings      Settings[]  
+  giftcard_purchase_intent GiftCard_Purchase_Intent[]
 
 
   // Timestamps
@@ -379,4 +380,17 @@ model ActivityLog {
   @@index([resourceType, resourceId])
   @@index([severity])
   @@map("activity_logs")
+}
+
+model GiftCard_Purchase_Intent{
+  id              String @id @default(uuid()) 
+
+  customerName    String
+  customerEmail   String
+
+  merchantId      String
+  merchant        MerchantProfile @relation(references: [id], fields: [merchantId])
+
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt 
 }
