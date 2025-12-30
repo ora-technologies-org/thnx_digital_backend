@@ -117,7 +117,17 @@ export const getRedemptionHistoryQuerySchema = z.object({
 });
 
 
+export const getContactUsQuerySchema = z.object({
+  search: z.string().trim().optional(),
+    sortBy: z.enum(['createdAt', 'updatedAt', 'name', 'email'])
+    .default('createdAt'),
+    sortOrder: z.enum(['asc', 'desc']).default('desc'),
+    page: z.coerce.number().int().positive().min(1).default(1),
+    limit: z.coerce.number().int().positive().min(1).max(100).default(10),
+});
 
+
+export type GetContactUsQuery = z.infer<typeof getContactUsQuerySchema>;
 export type GetRedemptionHistoryQuery = z.infer<typeof getRedemptionHistoryQuerySchema>;
 export type GetVerifiedMerchantsQuery = z.infer<typeof getVerifiedMerchantsQuerySchema>;
 export type GetMyGiftCardsQuery = z.infer<typeof getMyGiftCardsQuerySchema>;

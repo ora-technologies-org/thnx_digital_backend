@@ -6,6 +6,7 @@ import { mode } from "crypto-js";
 import { StatusCodes } from "../utils/statusCodes";
 import { successResponse, errorResponse } from "../utils/response";
 import { error } from "console";
+import { GetContactUsQuery } from "../validators/query.validators";
 
 export const createContactUs = async (req: Request, res: Response, next: NextFunction) => {
     try {
@@ -41,36 +42,93 @@ export const createContactUs = async (req: Request, res: Response, next: NextFun
     }
 }
 
-export const getAllContactUs = async (req: Request, res: Response, next: NextFunction) => {
-    try {
-        const { search, order } = req.query;
-        const contact = await prisma.contactUs.findMany({
-            where: search
-            ? {
-                OR: [
-                {
-                    name:{
-                        contains: String(search),
-                        mode: "insensitive"
-                    }
-                },
-                {
-                    email: {
-                        contains: String(search),
-                        mode: "insensitive"
-                    }
-                }
-            ]
-        } : undefined,
-        orderBy :{ 
-            createdAt: order === "asc" ? "asc" : "desc"
+export const getAllContactUs = async (
+  req: Request,
+  res: Response,
+  next: NextFunction
+) => {
+  try {
+    // Cast req.query to the validated type
+    const { 
+      search, 
+      sortBy = 'createdAt', 
+      sortOrder = 'desc', 
+      page = 1, 
+      limit = 10 
+    } = req.query;
+
+    const pageNum = Number(page);
+    const limitNum = Number(limit);
+    const skip = (pageNum - 1) * limitNum;
+
+    const whereClause: any = search
+      ? {
+          OR: [
+            {
+              name: {
+                contains: search,
+                mode: 'insensitive' as const,
+              },
+            },
+            {
+              email: {
+                contains: search,
+                mode: 'insensitive' as const,
+              },
+            },
+            {
+              phone: {
+                contains: search,
+                mode: 'insensitive' as const,
+              },
+            },
+            {
+              message: {
+                contains: search,
+                mode: 'insensitive' as const,
+              },
+            },
+          ],
         }
-        })
-        if (!contact){
-            return res.status(StatusCodes.NOT_FOUND).json(error("Contact us data not found."))
-        }
-        return res.status(StatusCodes.OK).json(errorResponse("Contact Us fetched successfully.", contact))
-    } catch (error) {
-        
-    }
-}
+      : {};
+
+    // Fetch data and count in parallel
+    const [contacts, total] = await Promise.all([
+      prisma.contactUs.findMany({
+        where: whereClause,
+        skip,
+        take: limitNum,
+        orderBy: {
+          [sortBy as string]: sortOrder,
+        },
+      }),
+      prisma.contactUs.count({
+        where: whereClause,
+      }),
+    ]);
+
+    return res.status(StatusCodes.OK).json(
+      successResponse('Contact Us messages fetched successfully.', {
+        data: contacts,
+        pagination: {
+          total,
+          page: pageNum,
+          limit: limitNum,
+          totalPages: Math.ceil(total / limitNum),
+        },
+        filters: {
+          search: search || null,
+          sortBy,
+          sortOrder,
+        },
+      })
+    );
+  } catch (error: any) {
+    console.error('Get all contact us error:', error);
+    return res.status(StatusCodes.INTERNAL_SERVER_ERROR).json({
+      success: false,
+      message: 'Error fetching contact us messages',
+      error: error.message,
+    });
+  }
+};
