@@ -765,3 +765,94 @@ export const sendOTPEmail = async (
     console.error('OTP email error:', error);
   }
 };
+
+export const sendMerchantNotificationEmail = async (
+  merchantEmail: string,
+  merchantName: string,
+  customerName: string,
+  customerEmail: string,
+) => {
+  if (!resend) {
+    console.log('Email not configured, skipping merchant notification to:', merchantEmail);
+    return;
+  }
+
+  try {
+    await resend.emails.send({
+      from: 'THNX Digital <noreply@thnxdigital.com>',
+      to: merchantEmail,
+      subject: `New Gift Card Interest - ${customerName}`,
+      html: `
+        <!DOCTYPE html>
+        <html>
+        <head>
+          <style>
+            body { font-family: Arial, sans-serif; line-height: 1.6; color: #333; }
+            .container { max-width: 600px; margin: 0 auto; padding: 20px; }
+            .header { background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; padding: 30px; text-align: center; border-radius: 10px 10px 0 0; }
+            .content { background: #f9f9f9; padding: 30px; border-radius: 0 0 10px 10px; }
+            .customer-box { background: white; border: 2px solid #667eea; padding: 20px; margin: 20px 0; border-radius: 8px; }
+            .customer-info { margin: 10px 0; }
+            .label { font-weight: bold; color: #667eea; display: inline-block; min-width: 80px; }
+            .value { color: #333; }
+            .info-box { background: #e3f2fd; border-left: 4px solid #2196f3; padding: 15px; margin: 20px 0; border-radius: 4px; }
+            .cta-button { display: inline-block; background: #667eea; color: white; padding: 12px 30px; text-decoration: none; border-radius: 6px; margin: 20px 0; }
+            .footer { text-align: center; margin-top: 30px; color: #666; font-size: 14px; }
+          </style>
+        </head>
+        <body>
+          <div class="container">
+            <div class="header">
+              <h1 style="margin: 0;">🎉 New Customer Interest</h1>
+              <p style="margin: 10px 0 0 0;">THNX Digital</p>
+            </div>
+            
+            <div class="content">
+              <h2>Gift Card Purchase Interest</h2>
+              <p>Hello ${merchantName},</p>
+              <p>Great news! A customer is interested in purchasing a gift card from your business.</p>
+              
+              <div class="customer-box">
+                <h3 style="margin-top: 0; color: #667eea;">Customer Details</h3>
+                <div class="customer-info">
+                  <span class="label">Name:</span>
+                  <span class="value">${customerName}</span>
+                </div>
+                <div class="customer-info">
+                  <span class="label">Email:</span>
+                  <span class="value">${customerEmail}</span>
+                </div>
+              </div>
+              
+              <div class="info-box">
+                <strong>📋 Next Steps:</strong>
+                <ul style="margin: 10px 0 0 0; padding-left: 20px;">
+                  <li>Review the customer information above</li>
+                  <li>Reach out to the customer if needed</li>
+                  <li>Check your dashboard for more details</li>
+                </ul>
+              </div>
+              
+              <p><strong>Why this matters:</strong></p>
+              <ul>
+                <li>This customer has shown genuine interest in your business</li>
+                <li>Gift cards help increase customer loyalty and revenue</li>
+                <li>Quick follow-up can improve conversion rates</li>
+              </ul>
+              
+              <div class="footer">
+                <p>Need help? Contact us at <a href="mailto:support@thnxdigital.com">support@thnxdigital.com</a></p>
+                <p style="margin-top: 20px; color: #999;">© 2024 THNX Digital. All rights reserved.</p>
+              </div>
+            </div>
+          </div>
+        </body>
+        </html>
+      `,
+    });
+
+    console.log('Merchant notification email sent to:', merchantEmail);
+  } catch (error) {
+    console.error('Merchant notification email error:', error);
+  }
+};

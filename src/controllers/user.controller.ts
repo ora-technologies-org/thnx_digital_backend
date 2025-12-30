@@ -1,7 +1,7 @@
 import { NextFunction, Request, Response } from "express";
 import { createContactUsSchema } from "../validators/user.validator";
 import prisma from "../utils/prisma.util";
-import { sendContactUsAdminNotification, sendContactUsConfirmation } from "../utils/email.util";
+import { sendContactUsAdminNotification, sendContactUsConfirmation, sendMerchantNotificationEmail } from "../utils/email.util";
 import { mode } from "crypto-js";
 import { StatusCodes } from "../utils/statusCodes";
 import { successResponse, errorResponse } from "../utils/response";
@@ -132,3 +132,39 @@ export const getAllContactUs = async (
     });
   }
 };
+
+
+export const notifyMerchant = async (req: Request, res: Response) => {
+    try {
+        const { name, email, merchantId } = req.body;
+        const merchant = await prisma.merchantProfile.findFirst({
+            where:{
+                id: merchantId
+            },include:{
+                user: true
+            }
+        });
+        if (!merchant){
+            return res.status(StatusCodes.NOT_FOUND).json(errorResponse("Merchant not found with the given id."));
+        }
+        const purchase_intent = await prisma.giftCard_Purchase_Intent.create({
+            data:{
+                customerName: name,
+                customerEmail: email,
+                merchantId: merchantId
+            }
+        });
+        if (!purchase_intent){
+            return res.status(StatusCodes.BAD_REQUEST).json(errorResponse("Failed to notify merchant."));
+        }
+        try {
+            console.log(merchant.user.email, merchant.user.name);
+            const sendMail = sendMerchantNotificationEmail(merchant.user.email, merchant.user.name, name, email);
+        } catch (error: any) {
+            return res.status(StatusCodes.OK).json(errorResponse("Error sending email, but your response has been saved.", error.message));
+        }
+        return res.status(StatusCodes.OK).json(successResponse("Successfully notified merchant.", purchase_intent));
+    } catch (error: any) {
+        return res.status(StatusCodes.OK).json(errorResponse("Internal server error", error.message));
+    }
+}
