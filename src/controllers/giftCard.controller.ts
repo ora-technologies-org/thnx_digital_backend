@@ -2,13 +2,16 @@
 import { Request, Response } from 'express';
 import { 
   createGiftCardSchema, 
+  createSettingsSchema, 
+  udpateSettingSchema, 
   updateGiftCardSchema 
 } from '../validators/giftCard.validator';
 import prisma from '../utils/prisma.util';
 import { Decimal } from '@prisma/client/runtime/library';
 import { ActivityLogger } from '../services/activityLog.service';
+import { file, flushPages } from 'pdfkit';
 
-const GIFT_CARD_LIMIT = 10;
+// const GIFT_CARD_LIMIT = 10;
 
 // Define authenticated request interface
 interface AuthenticatedRequest extends Request {
@@ -38,8 +41,23 @@ export const createGiftCard = async (req: Request, res: Response) => {
       });
     }
 
+    const merchant = await prisma.merchantProfile.findUnique({
+      where:{
+        userId: merchantId
+      },include:{
+        settings: true
+      }
+    });
+    
+    if (!merchant){
+      return res.status(404).json({
+        success: false,
+        message: "Merchant not found with given Id."
+      })
+    }
+
     // Validate request body
-    const validatedData = createGiftCardSchema.parse(req.body);
+    const {title, description, price, expiryDate} = req.body;
 
     // Check gift card limit (only count active cards)
     const existingCardsCount = await prisma.giftCard.count({
@@ -49,34 +67,20 @@ export const createGiftCard = async (req: Request, res: Response) => {
       },
     });
 
-    if (existingCardsCount >= GIFT_CARD_LIMIT) {
-      await ActivityLogger.log({
-        actorId: merchantId,
-        actorType: 'merchant',
-        action: 'create_limit_reached',
-        category: 'GIFT_CARD',
-        description: `Gift card creation failed - limit of ${GIFT_CARD_LIMIT} reached`,
-        metadata: { attemptedTitle: validatedData.title, currentCount: existingCardsCount },
-        merchantId,
-        severity: 'WARNING',
-        req
-      });
-
-
+    if (existingCardsCount >= merchant.giftCardLimit) {
       return res.status(400).json({
         success: false,
-        message: `You have reached the maximum limit of ${GIFT_CARD_LIMIT} active gift cards`,
+        message: `You have reached the maximum limit of ${merchant.giftCardLimit} active gift cards`,
       });
     }
-
     // Create gift card
     const giftCard = await prisma.giftCard.create({
       data: {
         merchantId,
-        title: validatedData.title,
-        description: validatedData.description,
-        price: new Decimal(validatedData.price),
-        expiryDate: new Date(validatedData.expiryDate),
+        title: title,
+        description: description,
+        price: new Decimal(price),
+        expiryDate: new Date(expiryDate),
       },
       include: {
         merchant: {
@@ -98,14 +102,14 @@ export const createGiftCard = async (req: Request, res: Response) => {
       giftCard.id,
       merchantId,
       giftCard.title,
-      validatedData.price,
+      price,
       req
     );
 
     return res.status(201).json({
       success: true,
       message: 'Gift card created successfully',
-      data: { giftCard },
+      data: { giftCard, settings: merchant.settings},
     });
   } catch (error: any) {
     console.error('Create gift card error:', error);
@@ -142,6 +146,21 @@ export const getMyGiftCards = async (req: Request, res: Response) => {
         message: 'Unauthorized',
       });
     }
+    const merchant = await prisma.merchantProfile.findUnique({
+      where:{
+        userId: merchantId
+      },
+      include:{
+        settings: true
+      }
+    });
+
+    if (!merchant){
+      return res.status(404).json({
+        success: false,
+        message: "Merchant not found with given Id."
+      })
+    }
 
     const giftCards = await prisma.giftCard.findMany({
       where: { merchantId },
@@ -173,10 +192,11 @@ export const getMyGiftCards = async (req: Request, res: Response) => {
       success: true,
       data: { 
         giftCards,
+        settings: merchant.settings,
         total: giftCards.length,
         activeCards: activeCardsCount,
-        limit: GIFT_CARD_LIMIT,
-        remaining: Math.max(0, GIFT_CARD_LIMIT - activeCardsCount),
+        limit: merchant.giftCardLimit,
+        remaining: Math.max(0, merchant.giftCardLimit - activeCardsCount),
       },
     });
   } catch (error: any) {
@@ -205,6 +225,21 @@ export const getGiftCardById = async (req: Request, res: Response) => {
       return res.status(401).json({
         success: false,
         message: 'Unauthorized',
+      });
+    }
+
+    const merchant = await prisma.merchantProfile.findUnique({
+      where:{
+        userId: merchantId
+      },include:{
+        settings: true
+      }
+    });
+    
+    if (!merchant){
+      return res.status(400).json({
+        success: false,
+        message: "No merchant found with given id."
       });
     }
 
@@ -256,7 +291,10 @@ export const getGiftCardById = async (req: Request, res: Response) => {
 
     return res.status(200).json({
       success: true,
-      data: { giftCard },
+      data: { 
+        giftCard,
+        settings: merchant.settings
+      },
     });
   } catch (error: any) {
     console.error('Get gift card error:', error);
@@ -553,3 +591,158 @@ export const getActiveGiftCards = async (req: Request, res: Response) => {
     });
   }
 };
+
+export const createSettings = async (req:Request, res: Response) => {
+  try {
+    const userId = req.authUser?.userId;
+    const { primaryColor, secondaryColor, gradientDirection, fontFamily } = req.body;
+    const merchant = await prisma.merchantProfile.findUnique({
+      where:{
+        userId: userId
+      }
+    });
+    if (!merchant){
+      return res.status(404).json({
+        success: false,
+        message: "Merchant not found with the given id."
+      });
+    }
+    const findSettings = await prisma.settings.findUnique({
+      where:{
+        merchantId: merchant.id
+      }
+    });
+    if (findSettings){
+      return res.status(400).json({
+        success: false,
+        message: "Settings have already been created, please update it."
+      });
+    }
+    const settings = await prisma.settings.create({
+      data:{
+        merchantId: merchant.id,
+        primaryColor: primaryColor,
+        secondaryColor: secondaryColor,
+        gradientDirection: gradientDirection,
+        fontFamily: fontFamily,
+      }
+    });
+    if (!settings){
+      return res.status(400).json({
+        success: false, 
+        message: "Coudln't create settings for gift card."
+      });
+    }   
+    return res.status(200).json({
+      success: true,
+      message: "Created settings for gift card successfully.",
+      data: settings
+    });
+
+  } catch (error: any) {
+    return res.status(500).json({
+      success: false,
+      message: "Error creating settings",
+      error: error.message
+    })
+  }
+}
+
+export const updateSettings = async (req: Request, res: Response) => {
+  try {
+    const userId = req.authUser?.userId;
+
+    const merchant = await prisma.merchantProfile.findUnique({
+      where: { userId },
+    });
+
+    if (!merchant) {
+      return res.status(400).json({
+        success: false,
+        message: "No merchant found with the given id.",
+      });
+    }
+
+    const parsed = udpateSettingSchema.safeParse(req.body);
+
+    if (!parsed.success) {
+      return res.status(400).json({
+        success: false,
+        message: "Invalid settings data",
+        errors: parsed.error.flatten().fieldErrors,
+      });
+    }
+
+    const updateData = parsed.data;
+
+    if (Object.keys(updateData).length === 0) {
+      return res.status(400).json({
+        success: false,
+        message: "At least one field must be provided to update.",
+      });
+    }
+
+    const settings = await prisma.settings.update({
+      where: { merchantId: merchant.id },
+      data: updateData,
+    });
+
+    if (!settings){
+      return res.status(400).json({
+        success: false,
+        message: "Your settings couldn't be updated."
+      })
+    }
+    return res.status(200).json({
+      success: true,
+      message: "Settings updated successfully.",
+      data: settings
+    })
+
+  } catch (error: any) {
+    return res.status(500).json({
+      success: false,
+      message: "Error updating settings",
+      error: error.message
+    })
+  }
+}
+
+export const getCardSetting = async (req: Request, res: Response) => {
+  try {
+    const userId = req.authUser?.userId;
+    const merchant = await prisma.merchantProfile.findUnique({
+      where: {
+        userId: userId
+      }
+    });
+    if (!merchant){
+      return res.status(400).json({
+        success: false,
+        message: "No merchant found with given id."
+      });
+    }
+    const settings = await prisma.settings.findFirst({
+      where:{
+        merchantId: merchant.id
+      }
+    });
+    if (!settings){
+      return res.status(400).json({
+        success: false,
+        message: "No settings available."
+      });
+    }
+    return res.status(200).json({
+      success: true,
+      message: "Fetched card setting successfully.",
+      data: settings
+    })
+  } catch (error: any) {
+    return res.status(500).json({
+      success: false,
+      message: "Error fetching card settings",
+      error: error.message
+    })
+  }
+} 

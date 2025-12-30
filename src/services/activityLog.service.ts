@@ -55,7 +55,7 @@ export const logActivity = (params: LogActivityParams): void => {
   };
 
   // Add to queue - fire and forget (non-blocking)
-  activityLogQueue.add('log', jobData).catch((error) => {
+  activityLogQueue.add('log', jobData).catch((error: any) => {
     console.error('Failed to queue activity log:', error);
   });
 };
