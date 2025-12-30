@@ -2007,7 +2007,7 @@ export const getAllSupportTickets = async (req:Request, res: Response, next: Nex
 
       }: undefined,
       orderBy :{ 
-        createadAt: order === "asc" ? "asc" : "desc"
+        createdAt: order === "asc" ? "asc" : "desc"
       }
     });
     if (!supportTickets){
