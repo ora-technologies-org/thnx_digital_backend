@@ -16,8 +16,9 @@ import {
   requireVerification,
   requireCompleteProfile,
 } from '../middleware/auth.middleware';
-import { validate } from '../middleware/validation.middleware';
+import { queryValidation, validate } from '../middleware/validation.middleware';
 import { createGiftCardSchema, createSettingsSchema } from '../validators/giftCard.validator';
+import { getMyGiftCardsQuerySchema } from '../validators/query.validators';
 
 const router = express.Router();
 
@@ -229,6 +230,7 @@ router.get(
   authenticate,
   authorize('MERCHANT'),
   requireCompleteProfile,
+  queryValidation(getMyGiftCardsQuerySchema),
   getMyGiftCards
 );
 

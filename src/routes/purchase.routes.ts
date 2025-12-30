@@ -14,8 +14,9 @@ import {
   authorize,
   requireVerification,
 } from '../middleware/auth.middleware';
-import { validate } from '../middleware/validation.middleware';
+import { queryValidation, validate } from '../middleware/validation.middleware';
 import { purchaseGiftCardSchema, redeemGiftCardSchema } from '../validators/purchase.validator';
+import { getRedemptionHistoryQuerySchema } from '../validators/query.validators';
 
 const router = express.Router();
 
@@ -68,6 +69,7 @@ router.get(
   authenticate, // FIXED: Was commented out
   authorize('MERCHANT'),
   requireVerification, // Only verified merchants can view history
+  queryValidation(getRedemptionHistoryQuerySchema),
   getRedemptionHistory
 );
 

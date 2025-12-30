@@ -28,10 +28,11 @@ import {
 } from "../middleware/auth.middleware";
 import { uploadMerchantDocs } from "../utils/multer";
 import { updateProfile } from "../controllers/admin.controller";
-import { validate } from "../middleware/validation.middleware";
+import { queryValidation, validate } from "../middleware/validation.middleware";
 import { adminCreateMerchantSchema } from "../validators/auth.validator";
 import { merchantVerifySchema } from "../validators/user.validator";
 import { getMerchantDashboardStats } from "../controllers/analytics.controller";
+import { getMerchantsQuerySchema, getPendingMerchantsQuerySchema, getPurchaseOrdersQuerySchema, getSupportTicketsQuerySchema, getVerifiedMerchantsQuerySchema } from "../validators/query.validators";
 
 const router = express.Router();
 
@@ -361,7 +362,7 @@ router.post("/", authenticate, authorize("ADMIN"), uploadMerchantDocs, validate(
  *       500:
  *         $ref: '#/components/responses/InternalServerError'
  */
-router.get("/", authenticate, authorize("ADMIN"), getAllMerchants);
+router.get("/", authenticate, authorize("ADMIN"), queryValidation(getMerchantsQuerySchema), getAllMerchants);
 
 /**
  * @swagger
@@ -400,7 +401,7 @@ router.get("/", authenticate, authorize("ADMIN"), getAllMerchants);
  *       500:
  *         $ref: '#/components/responses/InternalServerError'
  */
-router.get("/pending", authenticate, authorize("ADMIN"), getPendingMerchants);
+router.get("/pending", authenticate, authorize("ADMIN"), queryValidation(getPendingMerchantsQuerySchema), getPendingMerchants);
 
 /**
  * @swagger
@@ -535,17 +536,17 @@ router.put("/:merchantId", authenticate, authorize("ADMIN"), uploadMerchantDocs,
 // router.get("/:merchantId", authenticate, authorize("ADMIN"), getMerchantById);
 
 router.get("/cards/:merchantId", authenticate, authorize("ADMIN"), getGiftCardByMerchant);
-router.get("/all/verified", authenticate, authorize("ADMIN"), getVerifiedMerchants);
+router.get("/all/verified", authenticate, authorize("ADMIN"), queryValidation(getVerifiedMerchantsQuerySchema), getVerifiedMerchants);
 router.get("/analytics/business", authenticate, authorize("ADMIN"), getOverallAnalytics);
 router.get("/analytics/report", authenticate, authorize("ADMIN"), generateAnalyticsPDF);
 router.post("/support-ticket", authenticate, authorize("MERCHANT"), createSupportTicket);
 
 
-router.get("/support-ticket", authenticate, authorize("ADMIN"), getAllSupportTickets);
+router.get("/support-ticket", authenticate, authorize("ADMIN"), queryValidation(getSupportTicketsQuerySchema), getAllSupportTickets);
 router.get("/support-ticket/:ticketId", authenticate, authorize("ADMIN"), getSupportTicketById);
 router.put("/support-ticket/:ticketId", authenticate, authorize("ADMIN"), updateSupportTicket);
 
-router.get("/orders", authenticate, authorize("MERCHANT"), getPurchaseOrders);
+router.get("/orders", authenticate, authorize("MERCHANT"), queryValidation(getPurchaseOrdersQuerySchema), getPurchaseOrders);
 
 router.put("/update/profile", authenticate, authorize("MERCHANT"), updateProfile)
 router.get("/dashboard", authenticate, authorize("MERCHANT"), getMerchantDashboardStats)
