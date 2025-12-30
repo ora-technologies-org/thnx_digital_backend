@@ -14,6 +14,7 @@ import { EmailService } from "../services/email.service";
 import { otpGenerator } from "../helpers/otp/otpGenerator";
 import { clientCommandMessageReg } from "bullmq";
 import { sendOTPEmail, sendWelcomeEmail } from "../utils/email.util";
+import notificationService from "../services/notification.service";
 
 // Define authenticated request interface
 interface AuthenticatedRequest extends Request {
@@ -55,7 +56,7 @@ export const purchaseGiftCard = async (req: Request, res: Response) => {
 
     if (!giftCard.isActive) {
 
-      await ActivityLogger.log({
+       ActivityLogger.log({
         actorType: 'user',
         action: 'purchase_failed',
         category: 'PURCHASE',
@@ -146,10 +147,30 @@ export const purchaseGiftCard = async (req: Request, res: Response) => {
       );
     }
 
+      await notificationService.onPurchaseMade(
+      purchasedCard.id,
+      giftCard.title,
+      giftCard.price.toNumber(),
+      customerName,
+      giftCard.merchantId
+    );
+
+    // 🔔 NOTIFICATION: Notify merchant about their gift card being purchased
+    await notificationService.onGiftCardPurchased(
+      giftCard.merchantId,
+      purchasedCard.id,
+      giftCard.title,
+      customerName,
+
+      giftCard.price.toNumber().toString()
+    );
 
 
-    // ✅ FIXED: Generate QR code image with ONLY the QR code ID
-    // Not the balance or other dynamic data!
+
+
+
+
+  
     const qrCodeImage = await generateQRCodeImage(purchasedCard.qrCode);
 
     // Send email with gift card (continue even if email fails)
@@ -376,7 +397,7 @@ export const redeemGiftCard = async (req: Request, res: Response) => {
     });
 
     if (!purchasedCard) {
-      await ActivityLogger.verificationFailed(
+      ActivityLogger.verificationFailed(
         qrCode,
         'Invalid QR code',
         merchantId,
@@ -394,7 +415,7 @@ export const redeemGiftCard = async (req: Request, res: Response) => {
     // Check if the gift card belongs to this merchant
     if (purchasedCard.giftCard.merchantId !== merchantId) {
 
-      await ActivityLogger.verificationFailed(
+      ActivityLogger.verificationFailed(
         qrCode,
         'Gift card belongs to different merchant',
         merchantId,
@@ -411,7 +432,7 @@ export const redeemGiftCard = async (req: Request, res: Response) => {
     // Check if expired
     if (new Date() > purchasedCard.expiresAt) {
 
-      await ActivityLogger.verificationFailed(
+      ActivityLogger.verificationFailed(
         qrCode,
         'Gift card expired',
         merchantId,
@@ -428,7 +449,7 @@ export const redeemGiftCard = async (req: Request, res: Response) => {
     // Check status
     if (purchasedCard.status !== "ACTIVE") {
 
-      await ActivityLogger.verificationFailed(
+      ActivityLogger.verificationFailed(
         qrCode,
         `Gift card status: ${purchasedCard.status}`,
         merchantId,
@@ -446,7 +467,7 @@ export const redeemGiftCard = async (req: Request, res: Response) => {
     const currentBalance = purchasedCard.currentBalance.toNumber();
     if (amount > currentBalance) {
 
-      await ActivityLogger.log({
+      ActivityLogger.log({
         actorId: merchantId,
         actorType: 'merchant',
         action: 'redemption_failed',
@@ -506,16 +527,33 @@ export const redeemGiftCard = async (req: Request, res: Response) => {
         lastUsedAt: new Date(),
       };
 
-      await ActivityLogger.redemptionSuccess(
-        // result.redemption.id || "",
-        "",
-        purchasedCard.id,
-        amount,
-        newBalance,
-        merchantId,
-        merchantId,
-        req
+      ActivityLogger.redemptionSuccess(
+      result.redemption.id,
+      purchasedCard.id,
+      amount,
+      newBalance,
+      merchantId,
+      merchantId,
+      req
     );
+
+    await notificationService.onRedemptionMade(
+      result.redemption.id,
+    amount,
+      purchasedCard.giftCard.title,
+      purchasedCard.customerName
+    );
+
+    await notificationService.onGiftCardRedeemed(
+      merchantId,
+      result.redemption.id,
+      purchasedCard.giftCard.title,
+      amount,
+      purchasedCard.customerName
+    );
+
+
+
 
       // If balance is zero, mark as fully redeemed
       if (newBalance === 0) {
@@ -535,7 +573,7 @@ export const redeemGiftCard = async (req: Request, res: Response) => {
 
     // Log if fully redeemed
     if (newBalance === 0) {
-      await ActivityLogger.redemptionFullyRedeemed(
+      ActivityLogger.redemptionFullyRedeemed(
         purchasedCard.id,
         purchasedCard.purchaseAmount.toNumber(),
         merchantId
@@ -543,7 +581,7 @@ export const redeemGiftCard = async (req: Request, res: Response) => {
     }
 
     // Log verification success
-    await ActivityLogger.verificationSuccess(
+    ActivityLogger.verificationSuccess(
       purchasedCard.id,
       qrCode.substring(0, 8) + '...',
       merchantId,
