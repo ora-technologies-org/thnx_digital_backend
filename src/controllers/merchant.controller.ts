@@ -1,15 +1,19 @@
-import { Request, Response } from "express";
+import { NextFunction, Request, Response } from "express";
 import prisma from "../utils/prisma.util";
 import {
-  adminCreateMerchantSchema,
   completeProfileSchema,
   merchantQuickRegisterSchema,
 } from "../validators/auth.validator";
 import { AuthenticatedRequest } from "./auth.controller";
 import bcrypt from "bcrypt";
 import { generateTokens } from "../utils/jwt.util";
+import PDFDocument from 'pdfkit';
+import { AnalyticsData } from "../interfaces/analyticsInterface";
+
 import { ActivityLogger } from "../services/activityLog.service";
 import { EmailService } from "../services/email.service";
+import { StatusCodes } from "../utils/statusCodes";
+import { successResponse, errorResponse } from "../utils/response";
 import notificationService from "../services/notification.service";
 /**
  * @route   POST /api/auth/merchant/register
@@ -18,42 +22,40 @@ import notificationService from "../services/notification.service";
  */
 export const merchantRegister = async (req: Request, res: Response) => {
   try {
-    const validatedData = merchantQuickRegisterSchema.parse(req.body);
+    const {email, password, name, phone,} = req.body;
 
     const existingUser = await prisma.user.findUnique({
-      where: { email: validatedData.email },
+      where: { email: email },
     });
 
     if (existingUser) {
-      return res.status(400).json({
-        success: false,
-        message: "User with this email already exists",
-      });
+      return res.status(StatusCodes.BAD_REQUEST).json(errorResponse("User with this email already exists."));
     }
 
-    const hashedPassword = await bcrypt.hash(validatedData.password, 10);
+    const hashedPassword = await bcrypt.hash(password, 10);
 
     const user = await prisma.$transaction(async (tx) => {
       const newUser = await tx.user.create({
         data: {
-          email: validatedData.email,
+          email: email,
           password: hashedPassword,
-          name: validatedData.name,
-          phone: validatedData.phone,
+          name: name,
+          phone: phone,
           role: "MERCHANT",
           emailVerified: false,
           isActive: true,
+          isFirstTime: false
         },
       });
 
-      await tx.merchantProfile.create({
-        data: {
-          userId: newUser.id,
-          businessName: validatedData.businessName,
-          profileStatus: "INCOMPLETE",
-          isVerified: false,
-        },
-      });
+      // await tx.merchantProfile.create({
+      //   data: {
+      //     userId: newUser.id,
+      //     businessName: businessName,
+      //     profileStatus: "INCOMPLETE",
+      //     isVerified: false,
+      //   },
+      // });
 
       return newUser;
     });
@@ -62,7 +64,7 @@ export const merchantRegister = async (req: Request, res: Response) => {
 
       await notificationService.onMerchantRegistered(
       user.id,
-      user.name || validatedData.businessName
+      user.name
     );
 
 
@@ -70,8 +72,8 @@ export const merchantRegister = async (req: Request, res: Response) => {
     EmailService.sendWelcomeEmail(
       user.email,
       user.name || "Merchant",
-      validatedData.password, // Send original password (before hashing)
-      validatedData.businessName,
+      password, // Send original password (before hashing)
+      name,
     );
 
     const tokens = generateTokens({
@@ -93,11 +95,7 @@ export const merchantRegister = async (req: Request, res: Response) => {
       },
     });
 
-    return res.status(201).json({
-      success: true,
-      message:
-        "Registration successful! Please complete your profile to get verified.",
-      data: {
+    return res.status(StatusCodes.CREATED).json(successResponse("Registration successful! Please complete your profile to get verified.",{
         user: {
           id: user.id,
           email: user.email,
@@ -106,20 +104,20 @@ export const merchantRegister = async (req: Request, res: Response) => {
           profileStatus: "INCOMPLETE",
         },
         tokens,
-      },
-    });
+      }
+    ));
   } catch (error: any) {
     console.error("Merchant registration error:", error);
-
+    
     if (error.name === "ZodError") {
-      return res.status(400).json({
+      return res.status(StatusCodes.BAD_REQUEST).json({
         success: false,
         message: "Validation error",
         errors: error.errors,
       });
     }
 
-    return res.status(500).json({
+    return res.status(StatusCodes.INTERNAL_SERVER_ERROR).json({
       success: false,
       message: "Internal server error",
       error: error.message,
@@ -139,56 +137,40 @@ export const completeProfile = async (req: Request, res: Response) => {
     const files = req.files as { [fieldname: string]: Express.Multer.File[] };
 
     if (!userId) {
-      return res.status(401).json({
-        success: false,
-        message: "Unauthorized",
-      });
+      return res.status(StatusCodes.UNAUTHORIZED).json(errorResponse("Unauthorized"));
     }
 
     if (authReq.authUser?.role !== "MERCHANT") {
-      return res.status(403).json({
-        success: false,
-        message: "Only merchants can complete profile",
-      });
+      return res.status(StatusCodes.FORBIDDEN).json(errorResponse("Only merchants can complete profile."));
     }
 
-    const existingProfile = await prisma.merchantProfile.findUnique({
-      where: { userId },
-    });
-
-    if (!existingProfile) {
-      return res.status(404).json({
-        success: false,
-        message: "Merchant profile not found",
-      });
-    }
-
-    if (existingProfile.profileStatus === "VERIFIED") {
-      return res.status(400).json({
-        success: false,
-        message: "Profile is already verified. Contact admin for changes.",
-      });
+    const merchant = await prisma.merchantProfile.findUnique({
+      where:{
+        userId: userId
+      }
+    }); 
+    if (merchant?.profileStatus === "VERIFIED"){
+      return res.status(StatusCodes.BAD_REQUEST).json(errorResponse("Profile already verified."));
     }
 
     const validatedData = completeProfileSchema.parse(req.body);
 
     if (!files?.identityDocument) {
-      return res.status(400).json({
-        success: false,
-        message: "Identity document is required",
-      });
+      return res.status(StatusCodes.OK).json(errorResponse("Identity document is required."));
     }
 
     const documentData = {
+      businessLogo: files?.businessLogo?.[0].path || "uploads/merchant-documents/static_logo.svg",
       registrationDocument: files?.registrationDocument?.[0]?.path || null,
       taxDocument: files?.taxDocument?.[0]?.path || null,
       identityDocument: files?.identityDocument?.[0]?.path,
       additionalDocuments: files?.additionalDocuments?.map((f) => f.path) || [],
     };
 
-    const updatedProfile = await prisma.merchantProfile.update({
-      where: { userId },
+    const updatedProfile = await prisma.merchantProfile.create({
       data: {
+        businessName: validatedData.businessName!,
+        businessLogo: documentData.businessLogo,
         businessRegistrationNumber: validatedData.businessRegistrationNumber,
         taxId: validatedData.taxId,
         businessType: validatedData.businessType,
@@ -212,6 +194,7 @@ export const completeProfile = async (req: Request, res: Response) => {
         identityDocument: documentData.identityDocument,
         additionalDocuments: documentData.additionalDocuments,
         profileStatus: "PENDING_VERIFICATION",
+        userId: userId
       },
       include: {
         user: {
@@ -254,27 +237,22 @@ export const completeProfile = async (req: Request, res: Response) => {
       profileStatus: "PENDING_VERIFICATION",
     });
 
-    return res.status(200).json({
-      success: true,
-      message:
-        "Profile submitted successfully! Waiting for admin verification.",
-      data: {
+    return res.status(StatusCodes.OK).json(successResponse("Profile submitted successfully! Waiting for admin verification.", {
         profile: updatedProfile,
         tokens,
-      },
-    });
+      }));
   } catch (error: any) {
     console.error("Complete profile error:", error);
 
     if (error.name === "ZodError") {
-      return res.status(400).json({
+      return res.status(StatusCodes.BAD_REQUEST).json({
         success: false,
         message: "Validation error",
         errors: error.errors,
       });
     }
 
-    return res.status(500).json({
+    return res.status(StatusCodes.INTERNAL_SERVER_ERROR).json({
       success: false,
       message: "Internal server error",
       error: error.message,
@@ -292,10 +270,7 @@ export const getMerchantProfile = async (req: Request, res: Response) => {
     const userId = req.authUser?.userId;
 
     if (!userId) {
-      return res.status(401).json({
-        success: false,
-        message: "Unauthorized",
-      });
+      return res.status(StatusCodes.UNAUTHORIZED).json(errorResponse("Unauthorized"));
     }
 
     // Get merchant profile with user details
@@ -327,10 +302,7 @@ export const getMerchantProfile = async (req: Request, res: Response) => {
     });
 
     if (!merchantProfile) {
-      return res.status(404).json({
-        success: false,
-        message: "Merchant profile not found",
-      });
+      return res.status(StatusCodes.NOT_FOUND).json(errorResponse("Merchant profile not found."));
     }
 
     // Determine completion percentage
@@ -359,9 +331,7 @@ export const getMerchantProfile = async (req: Request, res: Response) => {
       (field) => !merchantProfile[field as keyof typeof merchantProfile],
     );
 
-    return res.status(200).json({
-      success: true,
-      data: {
+    return res.status(StatusCodes.OK).json(successResponse("Merchant profile fetched successfully.",{
         profile: merchantProfile,
         stats: {
           completionPercentage,
@@ -371,11 +341,10 @@ export const getMerchantProfile = async (req: Request, res: Response) => {
           isVerified: merchantProfile.profileStatus === "VERIFIED",
           isRejected: merchantProfile.profileStatus === "REJECTED",
         },
-      },
-    });
+      }));
   } catch (error: any) {
     console.error("Get merchant profile error:", error);
-    return res.status(500).json({
+    return res.status(StatusCodes.INTERNAL_SERVER_ERROR).json({
       success: false,
       message: "Error fetching merchant profile",
       error: error.message,
@@ -394,10 +363,7 @@ export const resubmitProfile = async (req: Request, res: Response) => {
     const files = req.files as { [fieldname: string]: Express.Multer.File[] };
 
     if (!userId) {
-      return res.status(401).json({
-        success: false,
-        message: "Unauthorized",
-      });
+      return res.status(StatusCodes.UNAUTHORIZED).json(errorResponse("Unauthorized"));
     }
 
     // Get existing merchant profile
@@ -406,19 +372,14 @@ export const resubmitProfile = async (req: Request, res: Response) => {
     });
 
     if (!existingProfile) {
-      return res.status(404).json({
-        success: false,
-        message: "Merchant profile not found",
-      });
+      return res.status(StatusCodes.NOT_FOUND).json(errorResponse("Merchant profile not found"));
     }
 
     // Only allow resubmission if profile is rejected
     if (existingProfile.profileStatus !== "REJECTED") {
-      return res.status(400).json({
-        success: false,
-        message: `Cannot resubmit profile. Current status: ${existingProfile.profileStatus}`,
-        profileStatus: existingProfile.profileStatus,
-      });
+      return res.status(StatusCodes.BAD_REQUEST).json(errorResponse(`Cannot resubmit profile. Current status: ${existingProfile.profileStatus}`,{
+        profileStatus: existingProfile.profileStatus
+      }));
     }
 
     // Validate request body
@@ -439,10 +400,7 @@ export const resubmitProfile = async (req: Request, res: Response) => {
 
     // Ensure identity document is present
     if (!documentData.identityDocument) {
-      return res.status(400).json({
-        success: false,
-        message: "Identity document is required",
-      });
+      return res.status(StatusCodes.BAD_REQUEST).json(errorResponse("Identity document is required"));
     }
 
     // Update merchant profile
@@ -528,26 +486,21 @@ export const resubmitProfile = async (req: Request, res: Response) => {
 
 
 
-    return res.status(200).json({
-      success: true,
-      message:
-        "Profile resubmitted successfully! Waiting for admin verification.",
-      data: {
+    return res.status(StatusCodes.OK).json(successResponse("Profile resubmitted successfully! Waiting for admin verification.",{
         profile: updatedProfile,
-      },
-    });
+      }));
   } catch (error: any) {
     console.error("Resubmit profile error:", error);
 
     if (error.name === "ZodError") {
-      return res.status(400).json({
+      return res.status(StatusCodes.BAD_REQUEST).json({
         success: false,
         message: "Validation error",
         errors: error.errors,
       });
     }
 
-    return res.status(500).json({
+    return res.status(StatusCodes.INTERNAL_SERVER_ERROR).json({
       success: false,
       message: "Error resubmitting profile",
       error: error.message,
@@ -563,12 +516,8 @@ export const resubmitProfile = async (req: Request, res: Response) => {
 export const updateMerchantProfile = async (req: Request, res: Response) => {
   try {
     const userId = req.authUser?.userId;
-
     if (!userId) {
-      return res.status(401).json({
-        success: false,
-        message: "Unauthorized",
-      });
+      return res.status(StatusCodes.UNAUTHORIZED).json(errorResponse("Unauthorized"));
     }
 
     // Only allow updating these non-critical fields
@@ -584,10 +533,7 @@ export const updateMerchantProfile = async (req: Request, res: Response) => {
     );
 
     if (Object.keys(updates).length === 0) {
-      return res.status(400).json({
-        success: false,
-        message: "No valid fields to update",
-      });
+      return res.status(StatusCodes.BAD_REQUEST).json(errorResponse("No valid fields to update"));
     }
 
     // Update merchant profile
@@ -614,16 +560,12 @@ export const updateMerchantProfile = async (req: Request, res: Response) => {
       req
     );
 
-    return res.status(200).json({
-      success: true,
-      message: "Profile updated successfully",
-      data: {
+    return res.status(StatusCodes.OK).json(successResponse("Profile updated successfully",{
         profile: updatedProfile,
-      },
-    });
+      }))
   } catch (error: any) {
     console.error("Update profile error:", error);
-    return res.status(500).json({
+    return res.status(StatusCodes.INTERNAL_SERVER_ERROR).json({
       success: false,
       message: "Error updating profile",
       error: error.message,
@@ -639,57 +581,84 @@ export const updateMerchantProfile = async (req: Request, res: Response) => {
 export const adminCreateMerchant = async (req: Request, res: Response) => {
   try {
     const authReq = req as AuthenticatedRequest;
-    const validatedData = adminCreateMerchantSchema.parse(req.body);
+    const { email, password, name, phone, businessName, businessRegistrationNumber, taxId, businessType, businessCategory, address, city, state, zipCode, country, businessPhone, businessEmail, website, bankName, accountNumber, accountHolderName, ifscCode, swiftCode, description } = req.body;
     const adminId = authReq.authUser?.userId;
+    const files = req.files as { [fieldname: string]: Express.Multer.File[] };
 
     const existingUser = await prisma.user.findUnique({
-      where: { email: validatedData.email },
+      where: { email: email },
     });
 
     if (existingUser) {
-      return res.status(400).json({
-        success: false,
-        message: "User with this email already exists",
-      });
+      return res.status(StatusCodes.BAD_REQUEST).json(errorResponse("User with this email already exists."));
     }
 
-    const hashedPassword = await bcrypt.hash(validatedData.password, 10);
+    const existsRegistrationNumber = await prisma.merchantProfile.findFirst({
+      where: {
+        businessRegistrationNumber: businessRegistrationNumber
+      }
+    })
+
+    if (existsRegistrationNumber){
+      return res.status(StatusCodes.BAD_REQUEST).json(errorResponse("Provided business registration number is already in use."))
+    }
+
+    const documentData = {
+        registrationDocument: files?.registrationDocument?.[0]?.path || null,
+        taxDocument: files?.taxDocument?.[0]?.path || null,
+        identityDocument: files?.identityDocument?.[0]?.path,
+        additionalDocuments: files?.additionalDocuments?.map((f) => f.path) || [],
+        businessLogo: files?.businessLogo?.[0].path || "uploads/merchant-documents/static_logo.svg"
+    };
+
+    const hashedPassword = await bcrypt.hash(password, 10);
 
     const result = await prisma.$transaction(async (tx) => {
       const newUser = await tx.user.create({
         data: {
-          email: validatedData.email,
+          email: email,
           password: hashedPassword,
-          name: validatedData.name,
-          phone: validatedData.phone,
+          name: name,
+          phone: phone,
           role: "MERCHANT",
           emailVerified: true,
           isActive: true,
           createdById: adminId,
+          isFirstTime: true
         },
       });
 
       const merchantProfile = await tx.merchantProfile.create({
         data: {
           userId: newUser.id,
-          businessName: validatedData.businessName,
-          businessRegistrationNumber: validatedData.businessRegistrationNumber,
-          taxId: validatedData.taxId,
-          businessType: validatedData.businessType,
-          businessCategory: validatedData.businessCategory,
-          address: validatedData.address,
-          city: validatedData.city,
-          state: validatedData.state,
-          zipCode: validatedData.zipCode,
-          country: validatedData.country,
-          businessPhone: validatedData.businessPhone,
-          businessEmail: validatedData.businessEmail,
-          website: validatedData.website,
-          description: validatedData.description,
+          businessName: businessName,
+          businessLogo: documentData.businessLogo,
+          businessRegistrationNumber: businessRegistrationNumber,
+          taxId: taxId,
+          businessType: businessType,
+          businessCategory: businessCategory,
+          address: address,
+          city: city,
+          state: state,
+          zipCode: zipCode,
+          country: country,
+          businessPhone: businessPhone,
+          businessEmail: businessEmail,
+          website: website,
+          description: description,
           profileStatus: "VERIFIED",
           isVerified: true,
           verifiedAt: new Date(),
           verifiedById: adminId,
+          bankName: bankName,
+          accountNumber: accountNumber,
+          accountHolderName: accountHolderName,
+          ifscCode: ifscCode,
+          swiftCode: swiftCode,
+          taxDocument: documentData.taxDocument,
+          identityDocument: documentData.identityDocument,
+          additionalDocuments: documentData.additionalDocuments,
+          registrationDocument: documentData.registrationDocument,
         },
       });
 
@@ -702,61 +671,140 @@ export const adminCreateMerchant = async (req: Request, res: Response) => {
     ActivityLogger.merchantProfileCreated(
       result.merchantProfile.id,
       result.user.id,
-      validatedData.businessName,
+      businessName,
       req
     );
     
     // Log auto-verification by admin
     ActivityLogger.merchantVerified(
       result.merchantProfile.id,
-      validatedData.businessName,
+      businessName,
       adminId!,
       req
     );
 
     await notificationService.onProfileVerified(result.user.id);
 
-
-
-  
-
     EmailService.sendWelcomeEmail(
       result.user.email,
       result.user.name || "Merchant",
-      validatedData.password,
-      validatedData.businessName,
+      password,
+      businessName,
     );
 
-    return res.status(201).json({
-      success: true,
-      message: "Merchant created and verified successfully",
-      data: {
+    return res.status(StatusCodes.CREATED).json(successResponse("Merchant created and verified successfully",  {
         user: {
           id: result.user.id,
           email: result.user.email,
           name: result.user.name,
           role: result.user.role,
         },
-      },
-    });
+        merchantProfile: result.merchantProfile
+      }));
   } catch (error: any) {
     console.error("Admin create merchant error:", error);
 
     if (error.name === "ZodError") {
-      return res.status(400).json({
+      return res.status(StatusCodes.BAD_REQUEST).json({
         success: false,
         message: "Validation error",
         errors: error.errors,
       });
     }
 
-    return res.status(500).json({
+    return res.status(StatusCodes.INTERNAL_SERVER_ERROR).json({
       success: false,
       message: "Internal server error",
       error: error.message,
     });
   }
 };
+/**
+ * @route   GET /api/auth/merchants/:merchantId
+ * @desc    Update merchant api's
+ * @access  Admin only
+ */
+
+export const adminUpdateMerchant = async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const { merchantId } = req.params;
+    const files = req.files as {
+      registrationDocument?: Express.Multer.File[];
+      taxDocument?: Express.Multer.File[];
+      identityDocument?: Express.Multer.File[];
+      additionalDocuments?: Express.Multer.File[];
+      businessLogo?: Express.Multer.File[];
+    };
+
+
+    const updateData: Record<string, any> = {};
+    const allowedFileds = ["businessName", "businessRegistrationNumber", "taxId", "businessType", "businessCategory", "address", "city", "state", "zipCode", "country", "businessPhone", "businessEmail", "website", "bankName", "accountNumber", "accountHolderName", "ifscCode", "swiftCode", "description", "registrationDocument", "taxDocument", "identityDocument", "additionalDocuments", "giftCardLimit", "businessLogo"];
+    
+    const sentFields = Object.keys(req.body);
+    const invalidFields = sentFields.filter((field) => !allowedFileds.includes(field));
+    
+    if (invalidFields.length > 0){
+      return res.status(StatusCodes.BAD_REQUEST).json(errorResponse(`You cannot update the following fields: ${invalidFields.join(" ,")}`))
+    }
+
+    for (const field of allowedFileds){
+      if (req.body[field] !== undefined){
+        updateData[field] = req.body[field]
+      }
+    }
+
+    const merchant = await prisma.merchantProfile.findFirst({
+      where:{
+        id: merchantId
+      }
+    });
+
+    if (files?.registrationDocument?.[0]) {
+      updateData.registrationDocument =
+        files.registrationDocument[0].path;
+    }
+
+    if (files?.taxDocument?.[0]) {
+      updateData.taxDocument = files.taxDocument[0].path;
+    }
+
+    if (files?.identityDocument?.[0]) {
+      updateData.identityDocument = files.identityDocument[0].path;
+    }
+
+    if (files?.businessLogo?.[0]) {
+      updateData.businessLogo = files.businessLogo[0].path;
+    }
+
+    if (files?.additionalDocuments?.length) {
+      updateData.additionalDocuments = files.additionalDocuments.map(
+        (f) => f.path
+      );
+    }
+
+    if (updateData.giftCardLimit){
+      updateData.giftCardLimit = Number(updateData.giftCardLimit)
+    };
+    if (merchant?.profileStatus === "VERIFIED"){
+        updateData.profileStatus = "VERIFIED";
+        const updateMerchant = await prisma.merchantProfile.update({
+        where:{
+          id: merchantId
+        },
+        data: updateData
+      })
+      if (!updateMerchant){
+        return res.status(StatusCodes.BAD_REQUEST).json(errorResponse("Your profile couldn't be updated."));
+      }
+      return res.status(StatusCodes.OK).json(successResponse("Profile updated successfully.", updateMerchant))
+    }else{
+      return res.status(StatusCodes.BAD_REQUEST).json(errorResponse("This merchant profile cannot be updated at its current status."))
+    }
+
+  } catch (error: any) {
+    next(error);
+  }
+}
 
 
 /**
@@ -766,42 +814,127 @@ export const adminCreateMerchant = async (req: Request, res: Response) => {
  */
 export const getPendingMerchants = async (req: Request, res: Response) => {
   try {
-    const pendingMerchants = await prisma.merchantProfile.findMany({
-      where: {
-        profileStatus: "PENDING_VERIFICATION",
-      },
-      include: {
-        user: {
-          select: {
-            id: true,
-            email: true,
-            name: true,
-            phone: true,
-            createdAt: true,
+    const { search, sortBy = "createdAt", sortOrder = "desc" } = req.query;
+
+    // Pagination params
+    const page = Math.max(parseInt(req.query.page as string) || 1, 1);
+    const limit = Math.max(parseInt(req.query.limit as string) || 10, 1);
+    const skip = (page - 1) * limit;
+
+    const whereClause: any = {
+      profileStatus: "PENDING_VERIFICATION",
+    };
+
+    if (search) {
+      whereClause.OR = [
+        {
+          businessName: {
+            contains: search as string,
+            mode: "insensitive",
           },
         },
-      },
-      orderBy: {
-        createdAt: "desc",
-      },
-    });
+        {
+          businessEmail: {
+            contains: search as string,
+            mode: "insensitive",
+          },
+        },
+        {
+          city: {
+            contains: search as string,
+            mode: "insensitive",
+          },
+        },
+        {
+          country: {
+            contains: search as string,
+            mode: "insensitive",
+          },
+        },
+        {
+          user: {
+            email: {
+              contains: search as string,
+              mode: "insensitive",
+            },
+          },
+        },
+        {
+          user: {
+            name: {
+              contains: search as string,
+              mode: "insensitive",
+            },
+          },
+        },
+      ];
+    }
 
-    return res.status(200).json({
-      success: true,
-      data: {
+    // Validate sort fields
+    const validSortFields = ["createdAt", "updatedAt", "businessName", "city", "country"];
+    const orderByField = validSortFields.includes(sortBy as string) ? sortBy as string : "createdAt";
+    const order = sortOrder === "asc" ? "asc" : "desc";
+
+    const orderBy: any = {};
+    
+    // Handle nested sorting for user fields
+    if (orderByField === "createdAt" || orderByField === "updatedAt") {
+      orderBy[orderByField] = order;
+    } else {
+      orderBy[orderByField] = order;
+    }
+
+    const [pendingMerchants, total] = await Promise.all([
+      prisma.merchantProfile.findMany({
+        where: whereClause,
+        skip,
+        take: limit,
+        include: {
+          user: {
+            select: {
+              id: true,
+              email: true,
+              name: true,
+              phone: true,
+              createdAt: true,
+            },
+          },
+        },
+        orderBy,
+      }),
+      prisma.merchantProfile.count({
+        where: whereClause,
+      }),
+    ]);
+
+    return res.status(StatusCodes.OK).json(
+      successResponse("Pending merchants fetched successfully", {
         merchants: pendingMerchants,
-        count: pendingMerchants.length,
-      },
-    });
+        pagination: {
+          total,
+          page,
+          limit,
+          totalPages: Math.ceil(total / limit),
+        },
+        filters: {
+          search: search || null,
+          sortBy: orderByField,
+          sortOrder: order,
+        },
+      })
+    );
   } catch (error: any) {
     console.error("Get pending merchants error:", error);
-    return res.status(500).json({
+
+    return res.status(StatusCodes.INTERNAL_SERVER_ERROR).json({
       success: false,
       message: "Error fetching pending merchants",
       error: error.message,
     });
   }
 };
+
+
 
 /**
  * @route   POST /api/auth/admin/merchants/:merchantId/verify
@@ -815,43 +948,31 @@ export const verifyMerchant = async (req: Request, res: Response) => {
     const { action, rejectionReason, verificationNotes } = req.body;
     const adminId = authReq.authUser?.userId;
 
-    if (!["approve", "reject"].includes(action)) {
-      return res.status(400).json({
-        success: false,
-        message: 'Invalid action. Must be "approve" or "reject"',
-      });
+    if (action === "approve" && !verificationNotes){
+      return res.status(StatusCodes.BAD_REQUEST).json(errorResponse("Verification note is required."));
     }
 
     if (action === "reject" && !rejectionReason) {
-      return res.status(400).json({
-        success: false,
-        message: "Rejection reason is required",
-      });
+      return res.status(StatusCodes.BAD_REQUEST).json(errorResponse("Rejection reason is required."));
     }
 
     const merchantProfile = await prisma.merchantProfile.findUnique({
-      where: { userId: merchantId },
+      where: { id: merchantId },
       include: {
         user: true,
       },
     });
 
     if (!merchantProfile) {
-      return res.status(404).json({
-        success: false,
-        message: "Merchant profile not found",
-      });
+      return res.status(StatusCodes.NOT_FOUND).json(errorResponse("Merchant profile not found."));
     }
 
     if (merchantProfile.profileStatus === "VERIFIED") {
-      return res.status(400).json({
-        success: false,
-        message: "Merchant is already verified",
-      });
+      return res.status(StatusCodes.BAD_REQUEST).json(errorResponse("Merchant is already verified."));
     }
 
     const updatedProfile = await prisma.merchantProfile.update({
-      where: { userId: merchantId },
+      where: { id: merchantId },
       data:
         action === "approve"
           ? {
@@ -904,16 +1025,10 @@ export const verifyMerchant = async (req: Request, res: Response) => {
 
     }
 
-    return res.status(200).json({
-      success: true,
-      message: `Merchant ${action === "approve" ? "approved" : "rejected"} successfully`,
-      data: {
-        profile: updatedProfile,
-      },
-    });
+    return res.status(StatusCodes.OK).json(successResponse(`Merchant ${action === "approve" ? "approved" : "rejected"} successfully`, {profile: updatedProfile}));
   } catch (error: any) {
     console.error("Verify merchant error:", error);
-    return res.status(500).json({
+    return res.status(StatusCodes.INTERNAL_SERVER_ERROR).json({
       success: false,
       message: "Error verifying merchant",
       error: error.message,
@@ -928,34 +1043,185 @@ export const verifyMerchant = async (req: Request, res: Response) => {
  */
 export const getAllMerchants = async (req: Request, res: Response) => {
   try {
-    const merchants = await prisma.merchantProfile.findMany({
-      include: {
-        user: {
-          select: {
-            id: true,
-            email: true,
-            name: true,
-            phone: true,
-            createdAt: true,
-            isActive: true,
+    const {
+      profileStatus,
+      active,
+      sortBy = "createdAt",
+      sortOrder = "desc",
+      createdBy,
+      search,
+    } = req.query;
+
+    // Pagination params
+    const page = Math.max(parseInt(req.query.page as string) || 1, 1);
+    const limit = Math.max(parseInt(req.query.limit as string) || 10, 1);
+    const skip = (page - 1) * limit;
+
+    const whereClause: any = {};
+
+    if (profileStatus) {
+      whereClause.profileStatus = profileStatus as string;
+    }
+
+    if (active !== undefined) {
+      whereClause.user = {
+        isActive: active === "true",
+      };
+    }
+
+    if (createdBy) {
+      whereClause.userId = createdBy as string;
+    }
+
+    if (search) {
+      whereClause.OR = [
+        {
+          businessName: {
+            contains: search as string,
+            mode: "insensitive",
           },
         },
-      },
-      orderBy: {
-        createdAt: "desc",
-      },
+        {
+          businessEmail: {
+            contains: search as string,
+            mode: "insensitive",
+          },
+        },
+        {
+          businessRegistrationNumber: {
+            contains: search as string,
+            mode: "insensitive",
+          },
+        },
+        {
+          city: {
+            contains: search as string,
+            mode: "insensitive",
+          },
+        },
+        {
+          country: {
+            contains: search as string,
+            mode: "insensitive",
+          },
+        },
+        {
+          businessType: {
+            contains: search as string,
+            mode: "insensitive",
+          },
+        },
+        {
+          businessCategory: {
+            contains: search as string,
+            mode: "insensitive",
+          },
+        },
+        {
+          user: {
+            email: {
+              contains: search as string,
+              mode: "insensitive",
+            },
+          },
+        },
+        {
+          user: {
+            name: {
+              contains: search as string,
+              mode: "insensitive",
+            },
+          },
+        },
+      ];
+    }
+
+    // Validate sort fields
+    const validSortFields = [
+      "createdAt",
+      "updatedAt",
+      "businessName",
+      "city",
+      "country",
+      "isVerified",
+      "verifiedAt",
+      "giftCardLimit",
+    ];
+    const orderByField = validSortFields.includes(sortBy as string) ? sortBy as string : "createdAt";
+    const order = sortOrder === "asc" ? "asc" : "desc";
+
+    const orderBy: any = { [orderByField]: order };
+
+    const countWhereClause: any = { ...whereClause };
+    delete countWhereClause.profileStatus;
+
+    const [merchants, total, statusCounts] = await Promise.all([
+      prisma.merchantProfile.findMany({
+        where: whereClause,
+        skip,
+        take: limit,
+        include: {
+          user: {
+            select: {
+              id: true,
+              email: true,
+              name: true,
+              phone: true,
+              createdAt: true,
+              isActive: true,
+            },
+          },
+        },
+        orderBy,
+      }),
+
+      prisma.merchantProfile.count({
+        where: whereClause,
+      }),
+
+      prisma.merchantProfile.groupBy({
+        by: ["profileStatus"],
+        where: countWhereClause,
+        _count: {
+          profileStatus: true,
+        },
+      }),
+    ]);
+
+    const counts = {
+      PENDING_VERIFICATION: 0,
+      VERIFIED: 0,
+      REJECTED: 0,
+      INCOMPLETE: 0,
+    };
+
+    statusCounts.forEach((item) => {
+      counts[item.profileStatus] = item._count.profileStatus;
     });
 
-    return res.status(200).json({
-      success: true,
-      data: {
+    return res.status(StatusCodes.OK).json(
+      successResponse("Merchants fetched successfully.", {
         merchants,
-        count: merchants.length,
-      },
-    });
+        pagination: {
+          total,
+          page,
+          limit,
+          totalPages: Math.ceil(total / limit),
+        },
+        filters: {
+          search: search || null,
+          sortBy: orderByField,
+          sortOrder: order,
+          profileStatus: profileStatus || null,
+          active: active || null,
+        },
+        statusCounts: counts,
+      })
+    );
   } catch (error: any) {
     console.error("Get all merchants error:", error);
-    return res.status(500).json({
+
+    return res.status(StatusCodes.INTERNAL_SERVER_ERROR).json({
       success: false,
       message: "Error fetching merchants",
       error: error.message,
@@ -963,12 +1229,57 @@ export const getAllMerchants = async (req: Request, res: Response) => {
   }
 };
 
+
+
+export const getMerchantById = async (req: Request, res: Response) => {
+  try {
+    const { merchantId } = req.params;
+    const merchant = await prisma.merchantProfile.findUnique({
+      where:{
+        id: merchantId
+      },include:{
+        user: {
+          select: {
+            id: true,
+            email: true,
+            name: true,
+            phone: true,
+            role: true,
+            isActive: true,
+            provider: true,
+            avatar: true,
+            bio: true,
+            emailVerified: true,
+            lastLogin: true,
+            createdAt: true,
+            updatedAt: true
+
+          }
+        }
+      }
+    });
+    // const {password, ...merchantData} = merchant?.user
+    if (!merchant){
+      return res.status(StatusCodes.NOT_FOUND).json(errorResponse("Merchant not found with the given id."));
+    }
+    return res.status(StatusCodes.OK).json(successResponse("Merchant fetched successfully", merchant));
+
+  } catch (error: any) {
+    console.error("Get all merchants error:", error);
+    return res.status(StatusCodes.INTERNAL_SERVER_ERROR).json({
+      success: false,
+      message: "Error fetching merchants",
+      error: error.message,
+    });
+  }
+}
+
 /**
  * @route   DELETE /api/auth/admin/merchants/:merchantId
  * @desc    Admin delete merchant (soft delete or hard delete)
  * @access  Admin only
  */
-export const deleteMerchant = async (req: Request, res: Response) => {
+export const deleteMerchant = async (req: Request, res: Response, next: NextFunction) => {
   try {
     const authReq = req as AuthenticatedRequest;
     const { merchantId } = req.params;
@@ -984,10 +1295,7 @@ export const deleteMerchant = async (req: Request, res: Response) => {
     });
 
     if (!merchantProfile) {
-      return res.status(404).json({
-        success: false,
-        message: "Merchant not found",
-      });
+      return res.status(StatusCodes.NOT_FOUND).json(errorResponse("Merchant not found"));
     }
 
     if (hardDelete) {
@@ -1027,12 +1335,7 @@ export const deleteMerchant = async (req: Request, res: Response) => {
         req
       });
 
-
-
-      return res.status(200).json({
-        success: true,
-        message: "Merchant permanently deleted",
-      });
+      return res.status(StatusCodes.OK).json(successResponse("Merchant permanently deleted."));
     } else {
       // Soft delete - deactivate the user
       await prisma.user.update({
@@ -1048,21 +1351,1166 @@ export const deleteMerchant = async (req: Request, res: Response) => {
       ActivityLogger.userDeactivated(merchantId, adminId!, req);
 
 
-      return res.status(200).json({
-        success: true,
-        message: "Merchant deactivated successfully",
-        data: {
+      return res.status(StatusCodes.OK).json(successResponse("Merchant deactivated successfully.", 
+        {
           merchantId,
-          email: merchantProfile.user.email,
-        },
-      });
-    }
+          email: merchantProfile.user.email}))
+        }
   } catch (error: any) {
     console.error("Delete merchant error:", error);
-    return res.status(500).json({
+    return res.status(StatusCodes.INTERNAL_SERVER_ERROR).json({
       success: false,
       message: "Error deleting merchant",
       error: error.message,
     });
+  }
+};``
+
+export const updateMerchantData = async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const id = req.authUser?.userId;
+    
+    console.log(req.body);
+    const files = req.files as {
+      registrationDocument?: Express.Multer.File[];
+      taxDocument?: Express.Multer.File[];
+      identityDocument?: Express.Multer.File[];
+      additionalDocuments?: Express.Multer.File[];
+      businessLogo?: Express.Multer.File[];
+    };
+
+
+    const updateData: Record<string, any> = {};
+    const allowedFileds = ["businessName", "businessRegistrationNumber", "taxId", "businessType", "businessCategory", "address", "city", "state", "zipCode", "country", "businessPhone", "businessEmail", "website", "bankName", "accountNumber", "accountHolderName", "ifscCode", "swiftCode", "description", "registrationDocument", "taxDocument", "identityDocument", "additionalDocuments", "businessLogo"];
+    
+    const sentFields = Object.keys(req.body);
+    const invalidFields = sentFields.filter((field) => !allowedFileds.includes(field));
+    
+    if (invalidFields.length > 0){
+      return res.status(StatusCodes.BAD_REQUEST).json({
+        success: false,
+        message: `You cannot update the following fields: ${invalidFields.join(" ,")}`
+      })
+    }
+
+    for (const field of allowedFileds){
+      if (req.body[field] !== undefined){
+        updateData[field] = req.body[field]
+      }
+    }
+
+    // const existsRegistrationNumber = await prisma.merchantProfile.findFirst({
+    //   where: {
+    //     businessRegistrationNumber: req.body.businessRegistrationNumber
+    //   }
+    // })
+
+    // if (existsRegistrationNumber){
+    //   return res.status(StatusCodes.BAD_REQUEST).json({
+    //     success: false,
+    //     message: "Provided business registration number is already in use"
+    //   })
+    // }
+
+    const merchant = await prisma.merchantProfile.findFirst({
+      where:{
+        userId: id
+      }
+    });
+    if (merchant?.profileStatus === "VERIFIED"){
+      return res.status(StatusCodes.BAD_REQUEST).json({
+        success: false,
+        message: "Profile verified. Therefore, couldn't be updated."
+      });
+    };
+    if (files?.registrationDocument?.[0]) {
+      updateData.registrationDocument =
+        files.registrationDocument[0].path;
+    }
+
+    if (files?.taxDocument?.[0]) {
+      updateData.taxDocument = files.taxDocument[0].path;
+    }
+
+    if (files?.identityDocument?.[0]) {
+      updateData.identityDocument = files.identityDocument[0].path;
+    }
+    if (files?.businessLogo?.[0]) {
+      updateData.businessLogo = files.businessLogo[0].path;
+    }
+
+    if (files?.additionalDocuments?.length) {
+      updateData.additionalDocuments = files.additionalDocuments.map(
+        (f) => f.path
+      );
+    }
+
+    updateData.profileStatus = "PENDING_VERIFICATION";
+
+    const updateMerchant = await prisma.merchantProfile.update({
+      where:{
+        userId: id
+      },
+      data: updateData
+    })
+    if (!updateMerchant){
+      return res.status(StatusCodes.BAD_REQUEST).json({
+        success: true,
+        message: "Your profile couldn't be updated"
+      });
+    }
+    return res.status(StatusCodes.OK).json(successResponse("Profile updated successfully", updateMerchant))
+
+  } catch (error: any) {
+      next(error);
+  }
+}
+
+
+export const getGiftCardByMerchant = async (
+  req: Request,
+  res: Response,
+  next: NextFunction
+) => {
+  try {
+    const { merchantId } = req.params;
+    const { search, sortBy = "createdAt", sortOrder = "desc" } = req.query;
+
+    // Pagination params
+    const page = Math.max(parseInt(req.query.page as string) || 1, 1);
+    const limit = Math.max(parseInt(req.query.limit as string) || 10, 1);
+    const skip = (page - 1) * limit;
+
+    const merchant = await prisma.merchantProfile.findFirst({
+      where: {
+        userId: merchantId,
+      },
+    });
+
+    if (!merchant) {
+      return res
+        .status(StatusCodes.NOT_FOUND)
+        .json(errorResponse("Merchant not found."));
+    }
+
+    const whereClause: any = {
+      merchantId,
+    };
+
+    // Add search filter if provided
+    if (search) {
+      whereClause.OR = [
+        {
+          title: {
+            contains: search as string,
+            mode: "insensitive",
+          },
+        },
+        {
+          description: {
+            contains: search as string,
+            mode: "insensitive",
+          },
+        },
+      ];
+    }
+
+    // Validate and set orderBy
+    const validSortFields = ["price", "createdAt", "updatedAt", "expiryDate", "title", "isActive", "status"];
+    const orderByField = validSortFields.includes(sortBy as string) ? sortBy as string : "createdAt";
+    const order = sortOrder === "asc" ? "asc" : "desc";
+    const orderBy: any = { [orderByField]: order };
+
+    const [giftCards, total, setting] = await Promise.all([
+      prisma.giftCard.findMany({
+        where: whereClause,
+        skip,
+        take: limit,
+        orderBy,
+      }),
+      prisma.giftCard.count({
+        where: whereClause,
+      }),
+      prisma.settings.findFirst({
+        where: {
+          merchantId: merchant.id,
+        },
+      }),
+    ]);
+
+    return res.status(StatusCodes.OK).json(
+      successResponse("Gift cards fetched successfully.", {
+        giftCards,
+        setting,
+        pagination: {
+          total,
+          page,
+          limit,
+          totalPages: Math.ceil(total / limit),
+        },
+        filters: {
+          search: search || null,
+          sortBy: orderByField,
+          sortOrder: order,
+        },
+      })
+    );
+  } catch (error: any) {
+    console.error("Get gift cards by merchant error:", error);
+
+    return res.status(StatusCodes.INTERNAL_SERVER_ERROR).json({
+      success: false,
+      message: "Error fetching gift cards",
+      error: error.message,
+    });
+  }
+};
+
+
+
+export const getVerifiedMerchants = async (
+  req: Request,
+  res: Response,
+  next: NextFunction
+) => {
+  try {
+    const { search, sortBy = "createdAt", sortOrder = "desc" } = req.query;
+
+    // Pagination params
+    const page = Math.max(parseInt(req.query.page as string) || 1, 1);
+    const limit = Math.max(parseInt(req.query.limit as string) || 10, 1);
+    const skip = (page - 1) * limit;
+
+    const whereClause: any = {
+      profileStatus: "VERIFIED",
+    };
+
+    // Add search filter if provided
+    if (search) {
+      whereClause.OR = [
+        {
+          businessName: {
+            contains: search as string,
+            mode: "insensitive",
+          },
+        },
+        {
+          businessEmail: {
+            contains: search as string,
+            mode: "insensitive",
+          },
+        },
+        {
+          businessType: {
+            contains: search as string,
+            mode: "insensitive",
+          },
+        },
+        {
+          businessCategory: {
+            contains: search as string,
+            mode: "insensitive",
+          },
+        },
+        {
+          city: {
+            contains: search as string,
+            mode: "insensitive",
+          },
+        },
+        {
+          state: {
+            contains: search as string,
+            mode: "insensitive",
+          },
+        },
+        {
+          country: {
+            contains: search as string,
+            mode: "insensitive",
+          },
+        },
+        {
+          description: {
+            contains: search as string,
+            mode: "insensitive",
+          },
+        },
+        {
+          user: {
+            name: {
+              contains: search as string,
+              mode: "insensitive",
+            },
+          },
+        },
+        {
+          user: {
+            email: {
+              contains: search as string,
+              mode: "insensitive",
+            },
+          },
+        },
+      ];
+    }
+
+    // Validate sort fields
+    const validSortFields = [
+      "createdAt",
+      "updatedAt",
+      "businessName",
+      "city",
+      "state",
+      "country",
+      "verifiedAt",
+      "giftCardLimit",
+    ];
+    const orderByField = validSortFields.includes(sortBy as string)
+      ? (sortBy as string)
+      : "createdAt";
+    const order = sortOrder === "asc" ? "asc" : "desc";
+
+    const orderBy: any = { [orderByField]: order };
+
+    const [merchants, total, activeCount] = await Promise.all([
+      prisma.merchantProfile.findMany({
+        where: whereClause,
+        skip,
+        take: limit,
+        orderBy,
+        include: {
+          user: {
+            select: {
+              id: true,
+              email: true,
+              name: true,
+              phone: true,
+              isActive: true,
+              createdAt: true,
+            },
+          },
+          _count: {
+            select: {
+              supportTicket: true,
+            },
+          },
+        },
+      }),
+      prisma.merchantProfile.count({
+        where: whereClause,
+      }),
+      prisma.merchantProfile.count({
+        where: {
+          profileStatus: "VERIFIED",
+          user: {
+            isActive: true,
+          },
+        },
+      }),
+    ]);
+
+    return res.status(StatusCodes.OK).json(
+      successResponse("Verified merchants fetched successfully", {
+        merchants,
+        pagination: {
+          total,
+          page,
+          limit,
+          totalPages: Math.ceil(total / limit),
+        },
+        filters: {
+          search: search || null,
+          sortBy: orderByField,
+          sortOrder: order,
+        },
+        stats: {
+          totalVerified: total,
+          activeVerified: activeCount,
+          inactiveVerified: total - activeCount,
+        },
+      })
+    );
+  } catch (error: any) {
+    console.error("Get verified merchants error:", error);
+
+    return res.status(StatusCodes.INTERNAL_SERVER_ERROR).json({
+      success: false,
+      message: "Error fetching verified merchants",
+      error: error.message,
+    });
+  }
+};
+
+
+
+
+export const getOverallAnalytics = async (
+  req: Request,
+  res: Response,
+  next: NextFunction
+) => {
+  try {
+    const [giftCards, purchases, redemptions, activeGiftCard] = await Promise.all([
+      prisma.giftCard.findMany({
+        include: {
+          purchases: true,
+        },
+      }),
+      prisma.purchasedGiftCard.findMany({
+        include: {
+          redemptions: true,
+        },
+      }),
+      prisma.redemption.findMany(),
+      prisma.giftCard.groupBy({
+        by: ['isActive'],
+        _count: {
+          id: true,
+        },
+      }),
+    ]);
+
+    const totalRevenue = purchases.reduce(
+      (sum, purchase) => sum + Number(purchase.purchaseAmount),
+      0
+    );
+    const redemptionAmount = redemptions.reduce(
+      (sum, redemption) => sum + Number(redemption.amount),
+      0
+    );
+    const outstandingBalance = purchases.reduce(
+      (sum, purchase) => sum + Number(purchase.currentBalance),
+      0
+    );
+
+    const activeCount = {
+      activeCards: 0,
+      inactiveCards: 0,
+    };
+    activeGiftCard.forEach((cards) => {
+      if (cards.isActive === true) {
+        activeCount.activeCards = cards._count.id;
+      } else if (cards.isActive === false) {
+        activeCount.inactiveCards = cards._count.id;
+      }
+    });
+
+    const popularGiftCards = await prisma.giftCard.findMany({
+      include: {
+        _count: {
+          select: {
+            purchases: true,
+          },
+        },
+        purchases: {
+          select: {
+            purchaseAmount: true,
+          },
+        },
+      },
+      orderBy: {
+        purchases: {
+          _count: 'desc',
+        },
+      },
+      take: 5,
+    });
+
+    const popularGiftCardsWithRevenue = popularGiftCards.map((card) => ({
+      id: card.id,
+      title: card.title,
+      price: card.price,
+      totalSold: card._count.purchases,
+      totalRevenue: card.purchases.reduce(
+        (sum, p) => sum + Number(p.purchaseAmount),
+        0
+      ),
+    }));
+
+    // Revenue by month (last 12 months)
+    const revenueByMonth = await getRevenueByMonth(purchases);
+
+    // Redemptions by month (last 12 months)
+    const redemptionsByMonth = await getRedemptionsByMonth(redemptions);
+
+    // Customer metrics
+    const customerMetrics = getCustomerMetrics(purchases);
+
+    // Card utilization metrics
+    const cardUtilization = getCardUtilization(purchases);
+
+    // Calculate rates
+    const averagePurchaseAmount =
+      purchases.length > 0 ? totalRevenue / purchases.length : 0;
+    const redemptionRate =
+      totalRevenue > 0 ? (redemptionAmount / totalRevenue) * 100 : 0;
+
+    const analyticsData: AnalyticsData = {
+      totalGiftCardIssued: giftCards.length,
+      totalRevenue,
+      activeCards: activeCount.activeCards,
+      inActiveCards: activeCount.inactiveCards,
+      totalPurchases: purchases.length,
+      totalRedemptions: redemptions.length,
+      averagePurchaseAmount,
+      redemptionRate,
+      redemptionAmount,
+      outstandingBalance,
+      popularGiftCards: popularGiftCardsWithRevenue,
+      revenueByMonth,
+      redemptionsByMonth,
+      customerMetrics,
+      cardUtilization,
+    };
+
+    return res.status(StatusCodes.OK).json(successResponse("Analytics fetched successfully", analyticsData));
+  } catch (error: any) {
+    console.error('Analytics Error:', error);
+    return res.status(StatusCodes.INTERNAL_SERVER_ERROR).json({
+      success: false,
+      message: 'Error fetching analytics',
+      error: error.message,
+    });
+  }
+};
+
+export const generateAnalyticsPDF = async (
+  req: Request,
+  res: Response,
+  next: NextFunction
+) => {
+  try {
+    // Fetch analytics data (reuse logic from getOverallAnalytics)
+    const [giftCards, purchases, redemptions, activeGiftCard] = await Promise.all([
+      prisma.giftCard.findMany({
+        include: {
+          purchases: true,
+        },
+      }),
+      prisma.purchasedGiftCard.findMany({
+        include: {
+          redemptions: true,
+        },
+      }),
+      prisma.redemption.findMany(),
+      prisma.giftCard.groupBy({
+        by: ['isActive'],
+        _count: {
+          id: true,
+        },
+      }),
+    ]);
+
+    const totalRevenue = purchases.reduce(
+      (sum, purchase) => sum + Number(purchase.purchaseAmount),
+      0
+    );
+    const redemptionAmount = redemptions.reduce(
+      (sum, redemption) => sum + Number(redemption.amount),
+      0
+    );
+    const outstandingBalance = purchases.reduce(
+      (sum, purchase) => sum + Number(purchase.currentBalance),
+      0
+    );
+
+    const activeCount = { activeCards: 0, inactiveCards: 0 };
+    activeGiftCard.forEach((cards) => {
+      if (cards.isActive === true) {
+        activeCount.activeCards = cards._count.id;
+      } else {
+        activeCount.inactiveCards = cards._count.id;
+      }
+    });
+
+    const popularGiftCards = await prisma.giftCard.findMany({
+      include: {
+        _count: { select: { purchases: true } },
+        purchases: { select: { purchaseAmount: true } },
+      },
+      orderBy: { purchases: { _count: 'desc' } },
+      take: 5,
+    });
+
+    const customerMetrics = getCustomerMetrics(purchases);
+    const cardUtilization = getCardUtilization(purchases);
+    const redemptionRate =
+      totalRevenue > 0 ? (redemptionAmount / totalRevenue) * 100 : 0;
+
+    // Create PDF
+    const doc = new PDFDocument({ margin: 50, size: 'A4' });
+
+    // Set response headers
+    res.setHeader('Content-Type', 'application/pdf');
+    res.setHeader(
+      'Content-Disposition',
+      `attachment; filename=analytics-report-${new Date().toISOString().split('T')[0]}.pdf`
+    );
+
+    // Pipe PDF to response
+    doc.pipe(res);
+
+    // Add content to PDF
+    addPDFHeader(doc);
+    addOverviewSection(doc, {
+      totalRevenue,
+      totalPurchases: purchases.length,
+      totalRedemptions: redemptions.length,
+      outstandingBalance,
+      redemptionRate,
+    });
+    addGiftCardSection(doc, {
+      total: giftCards.length,
+      active: activeCount.activeCards,
+      inactive: activeCount.inactiveCards,
+    });
+    addCustomerSection(doc, customerMetrics);
+    addUtilizationSection(doc, cardUtilization);
+    addPopularCardsSection(doc, popularGiftCards);
+    addFooter(doc);
+
+    // Finalize PDF
+    doc.end();
+  } catch (error: any) {
+    console.error('PDF Generation Error:', error);
+    return res.status(StatusCodes.INTERNAL_SERVER_ERROR).json({
+      success: false,
+      message: 'Error generating PDF',
+      error: error.message,
+    });
+  }
+};
+
+// Helper functions
+function getRevenueByMonth(purchases: any[]) {
+  const monthlyData = new Map<string, number>();
+  const now = new Date();
+
+  // Initialize last 12 months
+  for (let i = 11; i >= 0; i--) {
+    const date = new Date(now.getFullYear(), now.getMonth() - i, 1);
+    const key = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`;
+    monthlyData.set(key, 0);
+  }
+
+  // Aggregate revenue by month
+  purchases.forEach((purchase) => {
+    const date = new Date(purchase.purchasedAt);
+    const key = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`;
+    if (monthlyData.has(key)) {
+      monthlyData.set(key, monthlyData.get(key)! + Number(purchase.purchaseAmount));
+    }
+  });
+
+  return Array.from(monthlyData.entries()).map(([month, revenue]) => ({
+    month,
+    revenue,
+  }));
+}
+
+function getRedemptionsByMonth(redemptions: any[]) {
+  const monthlyData = new Map<string, { count: number; amount: number }>();
+  const now = new Date();
+
+  for (let i = 11; i >= 0; i--) {
+    const date = new Date(now.getFullYear(), now.getMonth() - i, 1);
+    const key = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`;
+    monthlyData.set(key, { count: 0, amount: 0 });
+  }
+
+  redemptions.forEach((redemption) => {
+    const date = new Date(redemption.redeemedAt);
+    const key = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`;
+    if (monthlyData.has(key)) {
+      const current = monthlyData.get(key)!;
+      monthlyData.set(key, {
+        count: current.count + 1,
+        amount: current.amount + Number(redemption.amount),
+      });
+    }
+  });
+
+  return Array.from(monthlyData.entries()).map(([month, data]) => ({
+    month,
+    ...data,
+  }));
+}
+
+function getCustomerMetrics(purchases: any[]) {
+  const customerEmails = new Map<string, number>();
+
+  purchases.forEach((purchase) => {
+    const count = customerEmails.get(purchase.customerEmail) || 0;
+    customerEmails.set(purchase.customerEmail, count + 1);
+  });
+
+  const totalCustomers = customerEmails.size;
+  const repeatCustomers = Array.from(customerEmails.values()).filter(
+    (count) => count > 1
+  ).length;
+  const totalRevenue = purchases.reduce(
+    (sum, p) => sum + Number(p.purchaseAmount),
+    0
+  );
+  const averageCustomerValue =
+    totalCustomers > 0 ? totalRevenue / totalCustomers : 0;
+
+  return {
+    totalCustomers,
+    repeatCustomers,
+    averageCustomerValue,
+  };
+}
+
+function getCardUtilization(purchases: any[]) {
+  const now = new Date();
+  let fullyRedeemed = 0;
+  let partiallyRedeemed = 0;
+  let unused = 0;
+  let expired = 0;
+
+  purchases.forEach((purchase) => {
+    const balance = Number(purchase.currentBalance);
+    const isExpired = new Date(purchase.expiresAt) < now;
+
+    if (isExpired) {
+      expired++;
+    } else if (balance === 0) {
+      fullyRedeemed++;
+    } else if (balance < Number(purchase.purchaseAmount)) {
+      partiallyRedeemed++;
+    } else {
+      unused++;
+    }
+  });
+
+  return { fullyRedeemed, partiallyRedeemed, unused, expired };
+}
+
+// PDF Generation Helper Functions
+function addPDFHeader(doc: PDFKit.PDFDocument) {
+  doc
+    .fontSize(24)
+    .font('Helvetica-Bold')
+    .text('Gift Card Analytics Report', { align: 'center' })
+    .moveDown(0.5);
+
+  doc
+    .fontSize(12)
+    .font('Helvetica')
+    .text(`Generated on: ${new Date().toLocaleDateString()}`, { align: 'center' })
+    .moveDown(1.5);
+
+  doc
+    .moveTo(50, doc.y)
+    .lineTo(550, doc.y)
+    .stroke()
+    .moveDown(1);
+}
+
+function addOverviewSection(doc: PDFKit.PDFDocument, data: any) {
+  doc.fontSize(16).font('Helvetica-Bold').text('Overview', { underline: true }).moveDown(0.5);
+
+  doc.fontSize(11).font('Helvetica');
+  doc.text(`Total Revenue: $${data.totalRevenue.toFixed(2)}`);
+  doc.text(`Total Purchases: ${data.totalPurchases}`);
+  doc.text(`Total Redemptions: ${data.totalRedemptions}`);
+  doc.text(`Outstanding Balance: $${data.outstandingBalance.toFixed(2)}`);
+  doc.text(`Redemption Rate: ${data.redemptionRate.toFixed(2)}%`);
+  doc.moveDown(1.5);
+}
+
+function addGiftCardSection(doc: PDFKit.PDFDocument, data: any) {
+  doc.fontSize(16).font('Helvetica-Bold').text('Gift Card Status', { underline: true }).moveDown(0.5);
+
+  doc.fontSize(11).font('Helvetica');
+  doc.text(`Total Gift Cards: ${data.total}`);
+  doc.text(`Active Cards: ${data.active}`);
+  doc.text(`Inactive Cards: ${data.inactive}`);
+  doc.moveDown(1.5);
+}
+
+function addCustomerSection(doc: PDFKit.PDFDocument, data: any) {
+  doc.fontSize(16).font('Helvetica-Bold').text('Customer Metrics', { underline: true }).moveDown(0.5);
+
+  doc.fontSize(11).font('Helvetica');
+  doc.text(`Total Customers: ${data.totalCustomers}`);
+  doc.text(`Repeat Customers: ${data.repeatCustomers}`);
+  doc.text(`Average Customer Value: $${data.averageCustomerValue.toFixed(2)}`);
+  doc.moveDown(1.5);
+}
+
+function addUtilizationSection(doc: PDFKit.PDFDocument, data: any) {
+  doc.fontSize(16).font('Helvetica-Bold').text('Card Utilization', { underline: true }).moveDown(0.5);
+
+  doc.fontSize(11).font('Helvetica');
+  doc.text(`Fully Redeemed: ${data.fullyRedeemed}`);
+  doc.text(`Partially Redeemed: ${data.partiallyRedeemed}`);
+  doc.text(`Unused: ${data.unused}`);
+  doc.text(`Expired: ${data.expired}`);
+  doc.moveDown(1.5);
+}
+
+function addPopularCardsSection(doc: PDFKit.PDFDocument, cards: any[]) {
+  doc.fontSize(16).font('Helvetica-Bold').text('Top 5 Popular Gift Cards', { underline: true }).moveDown(0.5);
+
+  doc.fontSize(11).font('Helvetica');
+  cards.forEach((card, index) => {
+    const revenue = card.purchases.reduce(
+      (sum: number, p: any) => sum + Number(p.purchaseAmount),
+      0
+    );
+    doc.text(
+      `${index + 1}. ${card.title} - ${card._count.purchases} sold - $${revenue.toFixed(2)} revenue`
+    );
+  });
+  doc.moveDown(1.5);
+}
+
+function addFooter(doc: PDFKit.PDFDocument) {
+  const bottomMargin = 50;
+  doc
+    .fontSize(9)
+    .font('Helvetica')
+    .text(
+      'This report is confidential and intended for internal use only.',
+      50,
+      doc.page.height - bottomMargin,
+      { align: 'center', width: StatusCodes.INTERNAL_SERVER_ERROR }
+    );
+}
+
+export const createSupportTicket = async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const { query, title } = req.body;
+    if (!query || !title){
+      return res.status(StatusCodes.BAD_REQUEST).json(errorResponse("Query and title are required to create a support ticket."));
+    }
+    const userId = req.authUser?.userId;
+    const merchant = await prisma.merchantProfile.findUnique({
+      where:{
+        userId: userId
+      }
+    });
+    if (!merchant){
+      return res.status(StatusCodes.NOT_FOUND).json(errorResponse("Merchant not found with given id."));
+    }
+    const createTicket = await prisma.supportTicket.create({
+      data:{
+        merchantId: merchant.id,
+        title: title,
+        merchantQuery: query
+      }
+    });
+    if (!createTicket){
+      return res.status(StatusCodes.BAD_REQUEST).json(errorResponse("Failed creating a support ticket"));
+    }
+    return res.status(StatusCodes.OK).json(successResponse("Support ticket created succesfully.", createTicket));
+
+  } catch (error: any) {
+    return res.status(StatusCodes.INTERNAL_SERVER_ERROR).json({
+      success: false,
+      message: "Error creating support ticket.",
+      error: error.message
+    })
+  }
+}
+
+export const getAllSupportTickets = async (
+  req: Request,
+  res: Response,
+  next: NextFunction
+) => {
+  try {
+    const {
+      search,
+      sortBy = "createdAt",
+      sortOrder = "desc",
+    } = req.query;
+
+    // Pagination params
+    const page = Math.max(parseInt(req.query.page as string) || 1, 1);
+    const limit = Math.max(parseInt(req.query.limit as string) || 10, 1);
+    const skip = (page - 1) * limit;
+
+    const whereClause: any = search
+      ? {
+          OR: [
+            {
+              title: {
+                contains: String(search),
+                mode: "insensitive" as const,
+              },
+            },
+            {
+              merchant: {
+                businessName: {
+                  contains: String(search),
+                  mode: "insensitive" as const,
+                },
+              },
+            },
+            {
+              merchant: {
+                user: {
+                  name: {
+                    contains: String(search),
+                    mode: "insensitive" as const,
+                  },
+                },
+              },
+            },
+            {
+              merchant: {
+                user: {
+                  email: {
+                    contains: String(search),
+                    mode: "insensitive" as const,
+                  },
+                },
+              },
+            },
+          ],
+        }
+      : {};
+
+    // Allow only safe sortable fields
+    const allowedSortFields = ["createdAt", "updatedAt", "status", "priority", "title"];
+    const sortField = allowedSortFields.includes(sortBy as string)
+      ? (sortBy as string)
+      : "createdAt";
+    const order = sortOrder === "asc" ? "asc" : "desc";
+
+    const [supportTickets, total] = await Promise.all([
+      prisma.supportTicket.findMany({
+        where: whereClause,
+        skip,
+        take: limit,
+        orderBy: {
+          [sortField]: order,
+        },
+        include: {
+          merchant: {
+            select: {
+              id: true,
+              businessName: true,
+              user: {
+                select: {
+                  id: true,
+                  name: true,
+                  email: true,
+                },
+              },
+            },
+          },
+        },
+      }),
+      prisma.supportTicket.count({
+        where: whereClause,
+      }),
+    ]);
+
+    return res.status(StatusCodes.OK).json(
+      successResponse("Fetched support tickets successfully.", {
+        data: supportTickets,
+        pagination: {
+          total,
+          page,
+          limit,
+          totalPages: Math.ceil(total / limit),
+        },
+        filters: {
+          search: search || null,
+          sortBy: sortField,
+          sortOrder: order,
+        },
+      })
+    );
+  } catch (error: any) {
+    console.error("Get all support tickets error:", error);
+    return res.status(StatusCodes.INTERNAL_SERVER_ERROR).json({
+      success: false,
+      message: "Error fetching support tickets",
+      error: error.message,
+    });
+  }
+};
+
+
+export const getSupportTicketById = async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const { ticketId } = req.params;
+    const supportTicket = await prisma.supportTicket.findFirst({
+      where:{
+        id: ticketId
+      }
+    });
+    if (!ticketId){
+      return res.status(StatusCodes.NOT_FOUND).json(errorResponse("No support ticket found with given id."))
+    }
+    return res.status(StatusCodes.OK).json(successResponse("Support ticket fetched successfully", supportTicket));
+
+  } catch (error: any) {
+    return res.status(StatusCodes.INTERNAL_SERVER_ERROR).json({
+      success: false,
+      message: "Error fetching support ticket",
+      error: error.message
+    })
+  }
+}
+
+export const updateSupportTicket = async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const { ticketId } = req.params;
+    const { response, status } = req.body;
+    if (!response || !status){
+      return res.status(StatusCodes.BAD_REQUEST).json(errorResponse("Response and status are required to update the ticket."))
+    }
+
+    if (status !== "CLOSE" && status !== "IN_PROGRESS"){
+      return res.status(StatusCodes.BAD_REQUEST).json(errorResponse("Status can either be CLOSE or IN_PROGRESS"));
+    }
+    
+    const supportTicket = await prisma.supportTicket.findFirst({
+      where: {
+        id: ticketId
+      }
+    });
+    if (!supportTicket){
+      return res.status(StatusCodes.NOT_FOUND).json(errorResponse("Support ticket not found!"))
+    }
+    const updateSupportTicket = await prisma.supportTicket.update({
+      where:{
+        id: String(ticketId)
+      },
+      data:{
+        adminResponse: response,
+        status: status
+      }
+    })
+    if (!updateSupportTicket){
+      return res.status(StatusCodes.BAD_REQUEST).json(errorResponse("Support Ticket couldn't be updated."));
+    }
+    return res.status(StatusCodes.OK).json(successResponse("Support Ticket updated successfully", updateSupportTicket));
+  } catch (error: any) {
+      return res.status(StatusCodes.INTERNAL_SERVER_ERROR).json(error("Internal Server error", error.message));
+  }
+}
+
+
+export const getPurchaseOrders = async (
+  req: Request,
+  res: Response,
+  next: NextFunction
+) => {
+  try {
+    const userId = req.authUser?.userId;
+    const { search, sortBy = "purchasedAt", sortOrder = "desc" } = req.query;
+
+    // Pagination params
+    const page = Math.max(parseInt(req.query.page as string) || 1, 1);
+    const limit = Math.max(parseInt(req.query.limit as string) || 10, 1);
+    const skip = (page - 1) * limit;
+
+    const merchant = await prisma.merchantProfile.findUnique({
+      where: {
+        userId: userId,
+      },
+    });
+
+    if (!merchant) {
+      return res
+        .status(StatusCodes.BAD_REQUEST)
+        .json(errorResponse("Merchant not found with given id"));
+    }
+
+    const whereClause: any = {
+      giftCard: {
+        merchantId: userId,
+      },
+    };
+
+    if (search) {
+      whereClause.OR = [
+        {
+          customerName: {
+            contains: String(search),
+            mode: "insensitive" as const,
+          },
+        },
+        {
+          customerEmail: {
+            contains: String(search),
+            mode: "insensitive" as const,
+          },
+        },
+        {
+          giftCard: {
+            title: {
+              contains: String(search),
+              mode: "insensitive" as const,
+            },
+          },
+        },
+      ];
+    }
+
+    // Validate sort fields
+    const validSortFields = [
+      "purchasedAt",
+      "redeemedAt",
+      "price",
+      "customerName",
+      "status",
+    ];
+    const orderByField = validSortFields.includes(sortBy as string)
+      ? (sortBy as string)
+      : "purchasedAt";
+    const order = sortOrder === "asc" ? "asc" : "desc";
+
+    const [orders, total] = await Promise.all([
+      prisma.purchasedGiftCard.findMany({
+        where: whereClause,
+        skip,
+        take: limit,
+        orderBy: {
+          [orderByField]: order,
+        },
+        include: {
+          giftCard: {
+            select: {
+              id: true,
+              title: true,
+              price: true,
+            },
+          },
+        },
+      }),
+      prisma.purchasedGiftCard.count({
+        where: whereClause,
+      }),
+    ]);
+
+    return res.status(StatusCodes.OK).json(
+      successResponse("Purchased orders fetched successfully.", {
+        data: orders,
+        pagination: {
+          total,
+          page,
+          limit,
+          totalPages: Math.ceil(total / limit),
+        },
+        filters: {
+          search: search || null,
+          sortBy: orderByField,
+          sortOrder: order,
+        },
+      })
+    );
+  } catch (error: any) {
+    return res
+      .status(StatusCodes.INTERNAL_SERVER_ERROR)
+      .json(error("Internal Server error", error.message));
   }
 };

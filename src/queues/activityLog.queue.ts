@@ -86,17 +86,17 @@ export const activityLogWorker = new Worker<ActivityLogJobData>(
   }
 );
 
-activityLogWorker.on('completed', (job) => {
+activityLogWorker.on('completed', (job: any) => {
   if (!isProduction) {
     console.log(`📝 Activity log job ${job.id} completed`);
   }
 });
 
-activityLogWorker.on('failed', (job, error) => {
+activityLogWorker.on('failed', (job: any, error: any) => {
   console.error(`❌ Activity log job ${job?.id} failed:`, error.message);
 });
 
-activityLogWorker.on('error', (error) => {
+activityLogWorker.on('error', (error: any) => {
   console.error('❌ Activity log worker error:', error);
 });
 

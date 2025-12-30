@@ -4,7 +4,7 @@ import swaggerJsdoc from "swagger-jsdoc";
 import path from "path";
 
 // Get absolute path to routes directory
-const routesDir = path.join(__dirname, "..", "routes");
+const routesDir = path.join(__dirname, "..", "routes", "**/*.routes.ts");
 
 const options: swaggerJsdoc.Options = {
   definition: {
@@ -433,6 +433,86 @@ const options: swaggerJsdoc.Options = {
             },
           },
         },
+        GetOtpRequest: {
+        type: "object",
+        required: ["email"],
+        properties: {
+          email: {
+            type: "string",
+            format: "email",
+            example: "user@example.com",
+          },
+        },
+      },VerifyOtpRequest: {
+          type: "object",
+          required: ["email", "otp"],
+          properties: {
+            email: {
+              type: "string",
+              format: "email",
+              example: "user@example.com",
+            },
+            otp: {
+              type: "string",
+              example: "123456",
+              description: "OTP sent to user's email",
+            },
+          },
+        },
+        ChangePasswordRequest: {
+          type: "object",
+          required: ["email", "otp", "password", "confirmPassword"],
+          properties: {
+            email: {
+              type: "string",
+              format: "email",
+              example: "user@example.com",
+            },
+            otp: {
+              type: "string",
+              example: "123456",
+            },
+            password: {
+              type: "string",
+              example: "Password@123",
+              description: "New password",
+            },
+            confirmPassword: {
+              type: "string",
+              example: "Password@123",
+            },
+          },
+        },
+        ResetPasswordRequest: {
+          type: "object",
+          required: ["password", "newPassword", "confirmPassword"],
+          properties: {
+            password: {
+              type: "string",
+              example: "OldPassword@123",
+              description: "Current password",
+            },
+            newPassword: {
+              type: "string",
+              example: "NewPassword@123",
+            },
+            confirmPassword: {
+              type: "string",
+              example: "NewPassword@123",
+            },
+          },
+        },
+        GoogleLoginRequest: {
+          type: "object",
+          required: ["credential"],
+          properties: {
+            credential: {
+              type: "string",
+              description: "Google ID token",
+              example: "eyJhbGciOiJSUzI1NiIsImtpZCI6Ij...",
+            },
+          },
+        },
       },
       responses: {
         UnauthorizedError: {
@@ -526,7 +606,9 @@ const options: swaggerJsdoc.Options = {
       { name: "Purchases", description: "Gift card purchase and redemption" },
     ],
   },
-  apis: [path.join(routesDir, "*.js")],
+  apis: [
+        path.join(process.cwd(), "src", "**/*.routes.ts"),
+    ],
 };
 
 // Debug logging

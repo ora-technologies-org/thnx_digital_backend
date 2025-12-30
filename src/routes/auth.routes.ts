@@ -6,6 +6,12 @@ import {
   refreshToken,
   getCurrentUser,
   logout,
+  getOtp,
+  verifyOtp,
+  changePassword,
+  googleLogin,
+  resetPassword,
+  resetAdminPassword,
 } from "../controllers/auth.controller";
 import { authenticate, authorize } from "../middleware/auth.middleware";
 import { uploadMerchantDocs } from "../utils/multer";
@@ -13,6 +19,8 @@ import {
   completeProfile,
   merchantRegister,
 } from "../controllers/merchant.controller";
+import { validate } from "../middleware/validation.middleware";
+import { changePasswordSchema, loginSchema, merchantQuickRegisterSchema, resetPasswordSchema } from "../validators/auth.validator";
 
 const router = express.Router();
 
@@ -66,7 +74,7 @@ const router = express.Router();
  *       500:
  *         $ref: '#/components/responses/InternalServerError'
  */
-router.post("/merchant/register", merchantRegister);
+router.post("/merchant/register", validate(merchantQuickRegisterSchema), merchantRegister);
 
 /**
  * @swagger
@@ -116,7 +124,7 @@ router.post("/merchant/register", merchantRegister);
  *       500:
  *         $ref: '#/components/responses/InternalServerError'
  */
-router.post("/login", login);
+router.post("/login", validate(loginSchema) ,login);
 
 /**
  * @swagger
@@ -451,5 +459,177 @@ router.post(
  *         $ref: '#/components/responses/InternalServerError'
  */
 router.get("/me", authenticate, getCurrentUser);
+
+
+/**
+ * @swagger
+ * /api/auth/get-otp:
+ *   post:
+ *     summary: Request OTP for password reset
+ *     description: Sends an OTP to the user's registered email for password reset
+ *     tags: [Auth]
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             $ref: '#/components/schemas/GetOtpRequest'
+ *     responses:
+ *       200:
+ *         description: OTP sent successfully
+ *       400:
+ *         description: Email is required
+ *       404:
+ *         description: User not found
+ *       500:
+ *         $ref: '#/components/responses/InternalServerError'
+ */
+router.post("/get-otp", getOtp);
+/**
+ * @swagger
+ * /api/auth/verify-otp:
+ *   post:
+ *     summary: Verify OTP
+ *     description: Verifies OTP sent to user's email
+ *     tags: [Auth]
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             $ref: '#/components/schemas/VerifyOtpRequest'
+ *     responses:
+ *       200:
+ *         description: OTP verified successfully
+ *       400:
+ *         description: Invalid or expired OTP
+ *       404:
+ *         description: User or OTP not found
+ *       500:
+ *         $ref: '#/components/responses/InternalServerError'
+ */
+router.post("/verify-otp", verifyOtp);
+
+/**
+ * @swagger
+ * /api/auth/reset-password:
+ *   post:
+ *     summary: Reset password using OTP
+ *     description: Reset user password after OTP verification
+ *     tags: [Auth]
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             $ref: '#/components/schemas/ChangePasswordRequest'
+ *     responses:
+ *       200:
+ *         description: Password changed successfully
+ *       400:
+ *         description: Validation error or OTP mismatch
+ *       404:
+ *         description: User not found
+ *       500:
+ *         $ref: '#/components/responses/InternalServerError'
+ */
+router.post("/reset-password", validate(changePasswordSchema), changePassword);
+
+/**
+ * @swagger
+ * /api/auth/google-login:
+ *   post:
+ *     summary: Login or register using Google
+ *     description: Authenticates user using Google ID token
+ *     tags: [Auth]
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             $ref: '#/components/schemas/GoogleLoginRequest'
+ *     responses:
+ *       200:
+ *         description: Google login successful
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/AuthResponse'
+ *       400:
+ *         description: Invalid Google token
+ *       500:
+ *         $ref: '#/components/responses/InternalServerError'
+ */
+router.post("/google-login", googleLogin);
+
+/**
+ * @swagger
+ * /api/auth/change-password:
+ *   post:
+ *     summary: Change merchant password
+ *     description: Allows authenticated merchant to change their password
+ *     tags: [Auth]
+ *     security:
+ *       - bearerAuth: []
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             $ref: '#/components/schemas/ResetPasswordRequest'
+ *     responses:
+ *       200:
+ *         description: Password changed successfully
+ *       400:
+ *         description: Invalid password or mismatch
+ *       401:
+ *         description: Unauthorized
+ *       403:
+ *         description: Merchant access only
+ *       500:
+ *         $ref: '#/components/responses/InternalServerError'
+ */
+router.post(
+  "/change-password",
+  authenticate,
+  authorize("MERCHANT"),
+  validate(resetPasswordSchema),
+  resetPassword
+);
+
+/**
+ * @swagger
+ * /api/auth/admin-password:
+ *   post:
+ *     summary: Change admin password
+ *     description: Allows authenticated admin to change their password
+ *     tags: [Auth]
+ *     security:
+ *       - bearerAuth: []
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             $ref: '#/components/schemas/ResetPasswordRequest'
+ *     responses:
+ *       200:
+ *         description: Password changed successfully
+ *       400:
+ *         description: Invalid password or mismatch
+ *       401:
+ *         description: Unauthorized
+ *       403:
+ *         description: Admin access only
+ *       500:
+ *         $ref: '#/components/responses/InternalServerError'
+ */
+router.post(
+  "/admin-password",
+  authenticate,
+  authorize("ADMIN"),
+  validate(resetPasswordSchema),
+  resetAdminPassword
+);
 
 export default router;

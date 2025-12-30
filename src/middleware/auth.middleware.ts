@@ -23,11 +23,10 @@ export const authenticate = async (
 ) => {
   try {
     const authHeader = req.headers.authorization;
-
     if (!authHeader || !authHeader.startsWith('Bearer ')) {
       return res.status(401).json({
         success: false,
-        message: 'Access token is required',
+        message: 'Authorization header is missing or not in Bearer token format.',
       });
     }
 
