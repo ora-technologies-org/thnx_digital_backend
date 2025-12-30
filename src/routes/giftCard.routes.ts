@@ -6,6 +6,9 @@ import {
   updateGiftCard,
   deleteGiftCard,
   getActiveGiftCards,
+  createSettings,
+  updateSettings,
+  getCardSetting,
 } from '../controllers/giftCard.controller';
 import {
   authenticate,
@@ -13,6 +16,8 @@ import {
   requireVerification,
   requireCompleteProfile,
 } from '../middleware/auth.middleware';
+import { validate } from '../middleware/validation.middleware';
+import { createGiftCardSchema, createSettingsSchema } from '../validators/giftCard.validator';
 
 const router = express.Router();
 
@@ -37,6 +42,7 @@ router.post(
   authenticate,
   authorize('MERCHANT'),
   requireVerification, // Only verified merchants can create
+  validate(createGiftCardSchema),
   createGiftCard
 );
 
@@ -91,5 +97,11 @@ router.delete(
   requireVerification, // Only verified merchants can delete
   deleteGiftCard
 );
+
+
+router.post("/settings", authenticate, authorize("MERCHANT"), validate(createSettingsSchema), createSettings);
+router.get("/card/settings", authenticate, authorize("MERCHANT"), getCardSetting);
+router.put("/card/settings", authenticate, authorize("MERCHANT"), updateSettings);
+
 
 export default router;

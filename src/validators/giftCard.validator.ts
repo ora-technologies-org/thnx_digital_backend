@@ -32,7 +32,7 @@ export const createGiftCardSchema = z.object({
       const today = new Date();
       today.setHours(0, 0, 0, 0); // Start of today
       return date > today;
-    }, 'Expiry date must be in the future'),
+    }, 'Expiry date must be in the future')
 });
 
 // Update Gift Card Schema
@@ -110,5 +110,33 @@ export const createGiftCardSchemaForm = z.object({
     }, 'Expiry date must be in the future'),
 });
 
+export const createSettingsSchema = z.object({
+  primaryColor: z.string().regex(/^#([0-9a-fA-F]{6})$/).default("#000000"),
+  secondaryColor: z.string().regex(/^#([0-9a-fA-F]{6})$/).default("#FFFFFF"),
+
+  gradientDirection: z.enum([
+    "LEFT_RIGHT",
+    "TOP_BOTTOM",
+    "TOP_RIGHT",
+    "BOTTOM_LEFT",
+  ]),
+  fontFamily: z.string().trim().optional(),
+});
+
+
+export const  udpateSettingSchema = z.object({
+  primaryColor: z.string().regex(/^#([0-9a-fA-F]{6})$/).default("#000000").optional(),
+  secondaryColor: z.string().regex(/^#([0-9a-fA-F]{6})$/).default("#FFFFFF").optional(),
+  gradientDirection: z.enum([
+    "LEFT_RIGHT",
+    "TOP_BOTTOM",
+    "TOP_RIGHT",
+    "BOTTOM_LEFT",
+  ]).optional(),
+  fontFamily: z.string().trim().optional(),
+})
+
 export type CreateGiftCardInput = z.infer<typeof createGiftCardSchema>;
 export type UpdateGiftCardInput = z.infer<typeof updateGiftCardSchema>;
+export type createSettingInput = z.infer<typeof createSettingsSchema>;
+export type updateSettingInput = z.infer<typeof udpateSettingSchema>;

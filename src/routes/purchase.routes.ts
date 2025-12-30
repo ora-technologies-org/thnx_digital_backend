@@ -5,12 +5,16 @@ import {
   redeemGiftCard,
   getRedemptionHistory,
   getCustomerPurchases,
+  requestOtp,
+  verifyOtp,
 } from '../controllers/purchase.controller';
 import {
   authenticate,
   authorize,
   requireVerification,
 } from '../middleware/auth.middleware';
+import { validate } from '../middleware/validation.middleware';
+import { purchaseGiftCardSchema, redeemGiftCardSchema } from '../validators/purchase.validator';
 
 const router = express.Router();
 
@@ -21,7 +25,7 @@ const router = express.Router();
  * @desc    Purchase a gift card (no login required)
  * @access  Public
  */
-router.post('/gift-cards/:giftCardId', purchaseGiftCard);
+router.post('/gift-cards/:giftCardId', validate(purchaseGiftCardSchema), purchaseGiftCard);
 
 /**
  * @route   GET /api/purchases/qr/:qrCode
@@ -49,6 +53,7 @@ router.post(
   authenticate,
   authorize('MERCHANT'),
   requireVerification, // Only verified merchants can redeem
+  validate(redeemGiftCardSchema),
   redeemGiftCard
 );
 
@@ -64,5 +69,8 @@ router.get(
   requireVerification, // Only verified merchants can view history
   getRedemptionHistory
 );
+
+router.post("/otp/request-otp", authenticate, authorize("MERCHANT"), requestOtp);
+router.post("/otp/verify-otp", authenticate, authorize("MERCHANT"), verifyOtp);
 
 export default router;
