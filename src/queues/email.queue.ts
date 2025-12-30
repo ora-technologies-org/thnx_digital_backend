@@ -81,7 +81,7 @@ export type EmailJobData =
   | MerchantRejectedEmailData
   | GenericEmailData;
 
-// ============ EMAIL QUEUE ============
+
 
 export const emailQueue = new Queue<EmailJobData>('emails', {
   connection: redisConfig,
