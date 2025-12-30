@@ -183,9 +183,6 @@ model GiftCard {
 
   purchases PurchasedGiftCard[]
 
-  //design
-  merchantLogo String?
-
   //status 
   status GiftCardStatus @default(ACTIVE)
 
