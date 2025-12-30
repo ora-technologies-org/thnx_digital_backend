@@ -164,12 +164,10 @@ export const getAdminDashboardStats = async (req: Request, res: Response) => {
         Number(item.revenue)
       ])
     );
-
     const monthlyRevenueTrends = allMonths.map((monthName, index) => ({
       month: monthName,
       revenue: monthlyRevenueMap.get(index) || 0
     }));
-
     // Get current month and previous month revenue for percentage calculation
     const currentMonth = endDate.getMonth();
     const previousMonth = currentMonth === 0 ? 11 : currentMonth - 1;

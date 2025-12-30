@@ -205,6 +205,7 @@ export const getMyGiftCards = async (req: Request, res: Response) => {
               merchantProfile: {
                 select: {
                   businessName: true,
+                  businessLogo: true
                 },
               },
             },
