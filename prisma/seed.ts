@@ -6,7 +6,6 @@ const prisma = new PrismaClient();
 async function main() {
   const adminEmail = 'admin@thnxdigital.com';
   const adminPassword = 'Admin@123456'; // Change this!
-
   const existingAdmin = await prisma.user.findUnique({
     where: { email: adminEmail },
   });

@@ -9,7 +9,8 @@ export const updateAdminProfileSchema = z.object({
 
   phone: z.string()
               .min(10, "Phone number should be 10 characters long.")  
-              .max(10, "Phone number should be 10 characters long."),
+              .max(10, "Phone number should be 10 characters long.")
+              .optional(),
   bio: z
     .string()
     .min(5, "Bio must be at least 5 characters")

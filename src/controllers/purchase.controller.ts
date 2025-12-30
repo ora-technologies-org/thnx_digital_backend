@@ -905,13 +905,13 @@ export const verifyOtp = async (req: Request, res: Response, next: NextFunction)
 
 export const qrRedemptionHistory = async (req: Request, res: Response, next: NextFunction) => {
   try {
-    const { qrCode } = req.body;
+    const { qrCode } = req.query;
     if (!qrCode){
       return res.status(StatusCodes.BAD_REQUEST).json(errorResponse("QR Code is required to fetch redemption history."));
     }
     const giftCard = await prisma.purchasedGiftCard.findUnique({
       where:{
-        qrCode: qrCode
+        qrCode: String(qrCode)
       }
     });
     if (!giftCard){
