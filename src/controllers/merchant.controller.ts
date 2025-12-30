@@ -80,7 +80,7 @@ export const merchantRegister = async (req: Request, res: Response) => {
 
     const expiresAt = new Date();
     expiresAt.setDate(expiresAt.getDate() + 7);
-
+    
     await prisma.refreshToken.create({
       data: {
         token: tokens.refreshToken,

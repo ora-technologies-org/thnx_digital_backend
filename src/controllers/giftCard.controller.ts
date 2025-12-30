@@ -135,7 +135,6 @@ export const getMyGiftCards = async (req: Request, res: Response) => {
         .status(StatusCodes.UNAUTHORIZED)
         .json(errorResponse("Unauthorized"));
     }
-    console.log("asninasidnasidniasd asndiona sdon a noians doiansdoina doin")
 
     const merchant = await prisma.merchantProfile.findUnique({
       where: {

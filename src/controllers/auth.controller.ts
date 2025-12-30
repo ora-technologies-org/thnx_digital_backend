@@ -86,6 +86,12 @@ export const login = async (req: Request, res: Response) => {
     const expiresAt = new Date();
     expiresAt.setDate(expiresAt.getDate() + 7);
 
+    await prisma.refreshToken.deleteMany({
+      where:{
+        userId: user.id
+      }
+    });
+
     await prisma.refreshToken.create({
       data: {
         token: tokens.refreshToken,
@@ -205,7 +211,11 @@ export const googleLogin = async (req: Request, res: Response) => {
       profileStatus,
     });
 
-
+    await prisma.refreshToken.deleteMany({
+      where:{
+        userId: user.id
+      }
+    });
     await prisma.refreshToken.create({
       data: {
         userId: user.id,
@@ -287,7 +297,7 @@ export const refreshToken = async (req: Request, res: Response) => {
       profileStatus: storedToken.user.merchantProfile?.profileStatus,
     });
 
-    await prisma.refreshToken.delete({
+    await prisma.refreshToken.deleteMany({
       where: { id: storedToken.id },
     });
 
