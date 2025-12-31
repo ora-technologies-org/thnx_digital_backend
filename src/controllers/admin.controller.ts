@@ -7,29 +7,8 @@ import { successResponse, errorResponse } from "../utils/response";
 export const updateProfile = async (req: Request, res: Response, next: NextFunction) => {
     try {
         const userId = req.authUser?.userId;
-
-        const allowedFields = ["name", "phone", "bio"];
-
-        const sentFields = Object.keys(req.body);
-        const invalidFields = sentFields.filter(
-        (field) => !allowedFields.includes(field)
-        );
-
-        if (invalidFields.length > 0) {
-            return res.status(StatusCodes.BAD_REQUEST).json(errorResponse(`You cannot update the following fields: ${invalidFields.join(", ")}`));
-        }
-
-        const parsed = updateAdminProfileSchema.safeParse(req.body);
-
-        if (!parsed.success) {
-        return res.status(StatusCodes.BAD_REQUEST).json({
-            success: false,
-            message: "Validation failed",
-            errors: parsed.error.flatten().fieldErrors,
-        });
-        }
-
-        const updateData = parsed.data;
+        
+        const updateData = req.body;
 
         if (Object.keys(updateData).length === 0) {
             return res.status(StatusCodes.BAD_REQUEST).json(errorResponse("At least one field is required to update"));
