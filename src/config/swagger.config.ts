@@ -348,7 +348,52 @@ const options: swaggerJsdoc.Options = {
             notes: { type: "string", example: "Coffee purchase" },
           },
         },
+        ContactUs: {
+          type: "object",
+          properties: {
+            id: { type: "string", format: "uuid" },
+            name: { type: "string", example: "John Doe" },
+            email: { type: "string", format: "email", example: "john@example.com" },
+            phone: { type: "string", example: "+1234567890" },
+            message: { type: "string", example: "I would like to know more about your platform." },
+            createdAt: { type: "string", format: "date-time" },
+            updatedAt: { type: "string", format: "date-time" },
+          },
+        },
 
+        CreateContactUsRequest: {
+          type: "object",
+          required: ["name", "email", "phone", "message"],
+          properties: {
+            name: { type: "string", example: "John Doe" },
+            email: { type: "string", format: "email", example: "john@example.com" },
+            phone: { type: "string", example: "+1234567890" },
+            message: { type: "string", example: "I would like to know more about your gift card platform." },
+          },
+        },
+
+        NotifyMerchantRequest: {
+          type: "object",
+          required: ["name", "email", "merchantId"],
+          properties: {
+            name: { type: "string", example: "Jane Smith", description: "Customer's name" },
+            email: { type: "string", format: "email", example: "jane@example.com", description: "Customer's email" },
+            merchantId: { type: "string", format: "uuid", example: "550e8400-e29b-41d4-a716-446655440000", description: "Merchant profile ID" },
+          },
+        },
+
+        GiftCardPurchaseIntent: {
+          type: "object",
+          properties: {
+            id: { type: "string", format: "uuid" },
+            customerName: { type: "string", example: "Jane Smith" },
+            customerEmail: { type: "string", format: "email", example: "jane@example.com" },
+            merchantId: { type: "string", format: "uuid" },
+            createdAt: { type: "string", format: "date-time" },
+            updatedAt: { type: "string", format: "date-time" },
+          },
+        },
+      
         // ==================== Response Schemas ====================
         SuccessResponse: {
           type: "object",
@@ -600,10 +645,13 @@ const options: swaggerJsdoc.Options = {
     },
     tags: [
       { name: "Auth", description: "Authentication endpoints (login, register, OAuth)" },
+      { name: "Admin", description: "Admin profile and dashboard management" },
       { name: "Merchants - Self Service", description: "Merchant self-service endpoints (profile, resubmit)" },
       { name: "Merchants - Admin", description: "Admin merchant management (create, verify, delete)" },
       { name: "Gift Cards", description: "Gift card CRUD operations" },
       { name: "Purchases", description: "Gift card purchase and redemption" },
+      { name: "Contact", description: "Contact us forms and merchant notifications" },
+
     ],
   },
   apis: [

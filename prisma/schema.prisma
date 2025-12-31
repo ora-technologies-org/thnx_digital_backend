@@ -313,6 +313,8 @@ model ContactUs{
   updatedAt         DateTime @updatedAt
 }
 
+
+
 model Settings{
   id                String @id @default(uuid())
 
