@@ -427,6 +427,12 @@ export const getCurrentUser = async (req: Request, res: Response) => {
   }
 };
 
+/**
+ * 
+ * @route POST /api/auth/get-otp 
+ * @desc  Get otp for forgot password
+ * @access  Private
+ */ 
 export const getOtp = async(req: Request, res: Response) => {
   try {
     const email = req.body.email;
@@ -476,6 +482,13 @@ export const getOtp = async(req: Request, res: Response) => {
   }
 }
 
+
+/**
+ * 
+ * @route POST /api/auth/verify-otp 
+ * @desc  Verify otp for forgot password
+ * @access  Private
+ */ 
 export const verifyOtp = async (req: Request, res: Response) => {
   try {
     const { email, otp } = req.body;
@@ -519,6 +532,12 @@ export const verifyOtp = async (req: Request, res: Response) => {
   }
 }
 
+/**
+ * 
+ * @route GET /api/auth/reset-password 
+ * @desc  Change password for forgot password
+ * @access  Private
+ */ 
 
 export const changePassword =  async (req: Request, res: Response) => {
   try {
@@ -580,6 +599,12 @@ export const changePassword =  async (req: Request, res: Response) => {
   }
 }
 
+/**
+ * 
+ * @route GET /api/auth/change-password 
+ * @desc  Change password for reset password
+ * @access  Private
+ */ 
 export const resetPassword = async (req: Request, res: Response) => {
   try {
     const id = req.authUser?.userId;
@@ -625,6 +650,12 @@ export const resetPassword = async (req: Request, res: Response) => {
   }
 }
 
+/**
+ * 
+ * @route GET /api/auth/admin-password 
+ * @desc  Change password for admin, reset password
+ * @access  Private
+ */ 
 export const resetAdminPassword = async(req: Request, res: Response, next: NextFunction) => {
   try {
     const userId = req.authUser?.userId;

@@ -29,7 +29,11 @@ interface AuthenticatedRequest extends Request {
     profileStatus?: string;
   };
 }
-
+/**
+ * Create purchase order of gift card.
+ * @route POST /api/purchases/gift-cards/:giftcardId
+ * @access Public 
+ */
 export const purchaseGiftCard = async (req: Request, res: Response) => {
   try {
     const { giftCardId } = req.params;
@@ -863,6 +867,11 @@ export const getCustomerPurchases = async (req: Request, res: Response) => {
   }
 };
 
+/**
+ * Request otp api for giftcard redemption
+ * @route POST /api/purchases/otp/request-otp
+ * @access Merchant (for verification)
+ */
 export const requestOtp = async (req: Request, res: Response, next: NextFunction) => {
   try {
     const { purchaseId } = req.body;
@@ -898,6 +907,11 @@ export const requestOtp = async (req: Request, res: Response, next: NextFunction
   }
 }
 
+/**
+ * Verify otp api for giftcard redemption
+ * @route POST /api/purchases/otp/verify-otp
+ * @access Merchant (for verification)
+ */
 export const verifyOtp = async (req: Request, res: Response, next: NextFunction) => {
   try {
     const { purchaseId, otp } = req.body;
@@ -941,6 +955,11 @@ export const verifyOtp = async (req: Request, res: Response, next: NextFunction)
   }
 }
 
+/**
+ * Get api for giftcard redemption history
+ * @route GET /api/purchases/redemptions/history
+ * @access Merchant only
+ */
 export const qrRedemptionHistory = async (req: Request, res: Response, next: NextFunction) => {
   try {
     const { qrCode } = req.query;

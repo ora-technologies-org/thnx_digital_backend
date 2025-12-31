@@ -669,7 +669,11 @@ export const getActiveGiftCards = async (req: Request, res: Response) => {
   }
 };
 
-
+/**
+ * Create gift card settings
+ * @route POST /api/gift-cards/settings
+ * @access Merchant (Verified)
+ */
 export const createSettings = async (req:Request, res: Response) => {
   try {
     const userId = req.authUser?.userId;
@@ -712,7 +716,11 @@ export const createSettings = async (req:Request, res: Response) => {
     })
   }
 }
-
+/**
+ * Update gift card settings
+ * @route PUT /api/gift-cards/settings
+ * @access Merchant (Verified)
+ */
 export const updateSettings = async (req: Request, res: Response) => {
   try {
     const userId = req.authUser?.userId;
@@ -749,7 +757,11 @@ export const updateSettings = async (req: Request, res: Response) => {
     })
   }
 }
-
+/**
+ * Get gift card settings
+ * @route GET /api/gift-cards/settings
+ * @access Merchant (Verified)
+ */
 export const getCardSetting = async (req: Request, res: Response) => {
   try {
     const userId = req.authUser?.userId;

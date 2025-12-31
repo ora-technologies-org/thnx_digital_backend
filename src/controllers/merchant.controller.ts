@@ -482,10 +482,6 @@ export const resubmitProfile = async (req: Request, res: Response) => {
       updatedProfile.id
     );
 
-
-
-
-
     return res.status(StatusCodes.OK).json(successResponse("Profile resubmitted successfully! Waiting for admin verification.",{
         profile: updatedProfile,
       }));
@@ -1240,7 +1236,11 @@ export const getAllMerchants = async (req: Request, res: Response) => {
   }
 };
 
-
+/**
+ * @route   GET /api/merchant/:id
+ * @desc    Admin gets merchant by their Id.
+ * @access  Admin only
+ */
 
 export const getMerchantById = async (req: Request, res: Response) => {
   try {
@@ -1377,6 +1377,12 @@ export const deleteMerchant = async (req: Request, res: Response, next: NextFunc
   }
 };
 
+
+/**
+ * @route   PUT /api/merchants/
+ * @desc    Merchant updates their profile.
+ * @access  Merchant only
+ */
 export const updateMerchantData = async (req: Request, res: Response, next: NextFunction) => {
   try {
     const validation = req.body;
@@ -1474,6 +1480,12 @@ export const updateMerchantData = async (req: Request, res: Response, next: Next
     next(error);
   }
 }
+
+/**
+ * @route   GET /api/merchantS/cards/:id
+ * @desc    Admin get's merchant specific gift card.
+ * @access  Admin only
+ */
 
 export const getGiftCardByMerchant = async (
   req: Request,
@@ -1574,7 +1586,11 @@ export const getGiftCardByMerchant = async (
   }
 };
 
-
+/**
+ * @route   GET /api/merchants/all/verified
+ * @desc    Admin gets verified merchant.
+ * @access  Admin only
+ */
 
 export const getVerifiedMerchants = async (
   req: Request,
@@ -2222,6 +2238,13 @@ export const createSupportTicket = async (req: Request, res: Response, next: Nex
   }
 }
 
+/**
+ * @route   GET /api/merchants/support-ticket
+ * @desc    Admin gets all support ticket created by merchant.
+ * @access  Admin only
+ */
+
+
 export const getAllSupportTickets = async (
   req: Request,
   res: Response,
@@ -2342,6 +2365,11 @@ export const getAllSupportTickets = async (
   }
 };
 
+/**
+ * @route   GET /api/merchants/support-ticket/:id
+ * @desc    Admin gets support ticket by id created by merchant.
+ * @access  Admin only
+ */
 
 export const getSupportTicketById = async (req: Request, res: Response, next: NextFunction) => {
   try {
@@ -2387,6 +2415,12 @@ export const getSupportTicketById = async (req: Request, res: Response, next: Ne
   }
 }
 
+/**
+ * @route   PUT /api/merchants/support-ticket/:id
+ * @desc    Admin updates support ticket created by merchant.
+ * @access  Admin only
+ */
+
 export const updateSupportTicket = async (req: Request, res: Response, next: NextFunction) => {
   try {
     const { ticketId } = req.params;
@@ -2418,6 +2452,11 @@ export const updateSupportTicket = async (req: Request, res: Response, next: Nex
   }
 }
 
+/**
+ * @route   GET /api/merchants/orders
+ * @desc    Merchant gets orders created by user for their giftcard..
+ * @access  Merchant only
+ */
 
 export const getPurchaseOrders = async (
   req: Request,
