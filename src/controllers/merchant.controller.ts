@@ -2188,9 +2188,6 @@ function addFooter(doc: PDFKit.PDFDocument) {
 export const createSupportTicket = async (req: Request, res: Response, next: NextFunction) => {
   try {
     const { query, title } = req.body;
-    if (!query || !title){
-      return res.status(StatusCodes.BAD_REQUEST).json(errorResponse("Query and title are required to create a support ticket."));
-    }
     const userId = req.authUser?.userId;
     const merchant = await prisma.merchantProfile.findUnique({
       where:{
@@ -2390,13 +2387,6 @@ export const updateSupportTicket = async (req: Request, res: Response, next: Nex
   try {
     const { ticketId } = req.params;
     const { response, status } = req.body;
-    if (!response || !status){
-      return res.status(StatusCodes.BAD_REQUEST).json(errorResponse("Response and status are required to update the ticket."))
-    }
-
-    if (status !== "CLOSE" && status !== "IN_PROGRESS"){
-      return res.status(StatusCodes.BAD_REQUEST).json(errorResponse("Status can either be CLOSE or IN_PROGRESS"));
-    }
     
     const supportTicket = await prisma.supportTicket.findFirst({
       where: {

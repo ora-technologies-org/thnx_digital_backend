@@ -17,7 +17,7 @@ import {
   requireCompleteProfile,
 } from '../middleware/auth.middleware';
 import { queryValidation, validate } from '../middleware/validation.middleware';
-import { createGiftCardSchema, createSettingsSchema } from '../validators/giftCard.validator';
+import { createGiftCardSchema, createSettingsSchema, udpateSettingSchema } from '../validators/giftCard.validator';
 import { getMyGiftCardsQuerySchema } from '../validators/query.validators';
 
 const router = express.Router();
@@ -645,7 +645,7 @@ router.get("/card/settings", authenticate, authorize("MERCHANT"), getCardSetting
  *       500:
  *         $ref: '#/components/responses/InternalServerError'
  */
-router.put("/card/settings", authenticate, authorize("MERCHANT"), updateSettings);
+router.put("/card/settings", authenticate, authorize("MERCHANT"), validate(udpateSettingSchema), updateSettings);
 
 
 

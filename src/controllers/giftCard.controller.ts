@@ -725,17 +725,7 @@ export const updateSettings = async (req: Request, res: Response) => {
       return res.status(StatusCodes.NOT_FOUND).json(errorResponse("No merchant found with the given id."));
     }
 
-    const parsed = udpateSettingSchema.safeParse(req.body);
-
-    if (!parsed.success) {
-      return res.status(400).json({
-        success: false,
-        message: "Invalid settings data",
-        errors: parsed.error.flatten().fieldErrors,
-      });
-    }
-
-    const updateData = parsed.data;
+    const updateData = req.body;
 
     if (Object.keys(updateData).length === 0) {
       return res.status(StatusCodes.BAD_REQUEST).json(errorResponse("At least one field must be provided to update."));

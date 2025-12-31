@@ -111,8 +111,19 @@ export const createGiftCardSchemaForm = z.object({
 });
 
 export const createSettingsSchema = z.object({
-  primaryColor: z.string().regex(/^#([0-9a-fA-F]{6})$/).default("#000000"),
-  secondaryColor: z.string().regex(/^#([0-9a-fA-F]{6})$/).default("#FFFFFF"),
+  primaryColor: z
+    .string()
+    .regex(
+      /^#([0-9a-fA-F]{6})$/,
+      "Primary color must be a valid hex code (e.g. #1A2B3C)"
+    ),
+
+  secondaryColor: z
+    .string()
+    .regex(
+      /^#([0-9a-fA-F]{6})$/,
+      "Secondary color must be a valid hex code (e.g. #FFFFFF)"
+    ),
 
   gradientDirection: z.enum([
     "LEFT_RIGHT",
@@ -125,8 +136,21 @@ export const createSettingsSchema = z.object({
 
 
 export const  udpateSettingSchema = z.object({
-  primaryColor: z.string().regex(/^#([0-9a-fA-F]{6})$/).default("#000000").optional(),
-  secondaryColor: z.string().regex(/^#([0-9a-fA-F]{6})$/).default("#FFFFFF").optional(),
+  primaryColor: z
+    .string()
+    .regex(
+      /^#([0-9a-fA-F]{6})$/,
+      "Primary color must be a valid hex code (e.g. #1A2B3C)"
+    )
+    .optional(),
+
+  secondaryColor: z
+    .string()
+    .regex(
+      /^#([0-9a-fA-F]{6})$/,
+      "Secondary color must be a valid hex code (e.g. #FFFFFF)"
+    )
+    .optional(),
   gradientDirection: z.enum([
     "LEFT_RIGHT",
     "TOP_BOTTOM",
