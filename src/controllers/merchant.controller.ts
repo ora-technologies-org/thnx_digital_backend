@@ -728,10 +728,16 @@ export const adminCreateMerchant = async (req: Request, res: Response) => {
  * @desc    Update merchant api's
  * @access  Admin only
  */
-
 export const adminUpdateMerchant = async (req: Request, res: Response, next: NextFunction) => {
   try {
+    // Validate request body and params with Zod
+    const validation =  req.body;
+      
+    
+    // Use validated data
+    const validatedData = validation;
     const { merchantId } = req.params;
+
     const files = req.files as {
       registrationDocument?: Express.Multer.File[];
       taxDocument?: Express.Multer.File[];
@@ -740,32 +746,32 @@ export const adminUpdateMerchant = async (req: Request, res: Response, next: Nex
       businessLogo?: Express.Multer.File[];
     };
 
+    // Build update data from validated body
+    const updateData: Record<string, any> = { ...validatedData };
 
-    const updateData: Record<string, any> = {};
-    const allowedFileds = ["businessName", "businessRegistrationNumber", "taxId", "businessType", "businessCategory", "address", "city", "state", "zipCode", "country", "businessPhone", "businessEmail", "website", "bankName", "accountNumber", "accountHolderName", "ifscCode", "swiftCode", "description", "registrationDocument", "taxDocument", "identityDocument", "additionalDocuments", "giftCardLimit", "businessLogo"];
-    
-    const sentFields = Object.keys(req.body);
-    const invalidFields = sentFields.filter((field) => !allowedFileds.includes(field));
-    
-    if (invalidFields.length > 0){
-      return res.status(StatusCodes.BAD_REQUEST).json(errorResponse(`You cannot update the following fields: ${invalidFields.join(" ,")}`))
-    }
-
-    for (const field of allowedFileds){
-      if (req.body[field] !== undefined){
-        updateData[field] = req.body[field]
-      }
-    }
-
+    // Check if merchant exists and get current status
     const merchant = await prisma.merchantProfile.findFirst({
-      where:{
+      where: {
         id: merchantId
       }
     });
 
+    if (!merchant) {
+      return res.status(StatusCodes.NOT_FOUND).json(
+        errorResponse("Merchant profile not found")
+      );
+    }
+
+    // Check if merchant profile can be updated
+    if (merchant.profileStatus !== "VERIFIED") {
+      return res.status(StatusCodes.BAD_REQUEST).json(
+        errorResponse("This merchant profile cannot be updated at its current status.")
+      );
+    }
+
+    // Handle file uploads
     if (files?.registrationDocument?.[0]) {
-      updateData.registrationDocument =
-        files.registrationDocument[0].path;
+      updateData.registrationDocument = files.registrationDocument[0].path;
     }
 
     if (files?.taxDocument?.[0]) {
@@ -786,30 +792,31 @@ export const adminUpdateMerchant = async (req: Request, res: Response, next: Nex
       );
     }
 
-    if (updateData.giftCardLimit){
-      updateData.giftCardLimit = Number(updateData.giftCardLimit)
-    };
-    if (merchant?.profileStatus === "VERIFIED"){
-        updateData.profileStatus = "VERIFIED";
-        const updateMerchant = await prisma.merchantProfile.update({
-        where:{
-          id: merchantId
-        },
-        data: updateData
-      })
-      if (!updateMerchant){
-        return res.status(StatusCodes.BAD_REQUEST).json(errorResponse("Your profile couldn't be updated."));
-      }
-      return res.status(StatusCodes.OK).json(successResponse("Profile updated successfully.", updateMerchant))
-    }else{
-      return res.status(StatusCodes.BAD_REQUEST).json(errorResponse("This merchant profile cannot be updated at its current status."))
+    // Keep profile status as VERIFIED for admin updates
+    updateData.profileStatus = "VERIFIED";
+
+    // Update merchant profile
+    const updateMerchant = await prisma.merchantProfile.update({
+      where: {
+        id: merchantId
+      },
+      data: updateData
+    });
+
+    if (!updateMerchant) {
+      return res.status(StatusCodes.BAD_REQUEST).json(
+        errorResponse("Your profile couldn't be updated.")
+      );
     }
+
+    return res.status(StatusCodes.OK).json(
+      successResponse("Profile updated successfully.", updateMerchant)
+    );
 
   } catch (error: any) {
     next(error);
   }
-}
-
+};
 
 /**
  * @route   GET /api/auth/admin/merchants/pending
@@ -1368,13 +1375,16 @@ export const deleteMerchant = async (req: Request, res: Response, next: NextFunc
       error: error.message,
     });
   }
-};``
+};
 
 export const updateMerchantData = async (req: Request, res: Response, next: NextFunction) => {
   try {
+    const validation = req.body;
+    const validatedData = validation;
+    console.log(validatedData);
+
     const id = req.authUser?.userId;
     
-    console.log(req.body);
     const files = req.files as {
       registrationDocument?: Express.Multer.File[];
       taxDocument?: Express.Multer.File[];
@@ -1383,53 +1393,43 @@ export const updateMerchantData = async (req: Request, res: Response, next: Next
       businessLogo?: Express.Multer.File[];
     };
 
+    // Build update data from validated body
+    const updateData: Record<string, any> = { ...validatedData };
 
-    const updateData: Record<string, any> = {};
-    const allowedFileds = ["businessName", "businessRegistrationNumber", "taxId", "businessType", "businessCategory", "address", "city", "state", "zipCode", "country", "businessPhone", "businessEmail", "website", "bankName", "accountNumber", "accountHolderName", "ifscCode", "swiftCode", "description", "registrationDocument", "taxDocument", "identityDocument", "additionalDocuments", "businessLogo"];
-    
-    const sentFields = Object.keys(req.body);
-    const invalidFields = sentFields.filter((field) => !allowedFileds.includes(field));
-    
-    if (invalidFields.length > 0){
-      return res.status(StatusCodes.BAD_REQUEST).json({
-        success: false,
-        message: `You cannot update the following fields: ${invalidFields.join(" ,")}`
-      })
-    }
+    // Check if registration number already exists (only if being updated)
+    if (validatedData.businessRegistrationNumber) {
+      const existsRegistrationNumber = await prisma.merchantProfile.findFirst({
+        where: {
+          businessRegistrationNumber: validatedData.businessRegistrationNumber,
+          userId: { not: id }
+        }
+      });
 
-    for (const field of allowedFileds){
-      if (req.body[field] !== undefined){
-        updateData[field] = req.body[field]
+      if (existsRegistrationNumber) {
+        return res.status(StatusCodes.BAD_REQUEST).json({
+          success: false,
+          message: "Provided business registration number is already in use"
+        });
       }
     }
 
-    // const existsRegistrationNumber = await prisma.merchantProfile.findFirst({
-    //   where: {
-    //     businessRegistrationNumber: req.body.businessRegistrationNumber
-    //   }
-    // })
-
-    // if (existsRegistrationNumber){
-    //   return res.status(StatusCodes.BAD_REQUEST).json({
-    //     success: false,
-    //     message: "Provided business registration number is already in use"
-    //   })
-    // }
-
+    // Check if profile is already verified
     const merchant = await prisma.merchantProfile.findFirst({
-      where:{
+      where: {
         userId: id
       }
     });
-    if (merchant?.profileStatus === "VERIFIED"){
+
+    if (merchant?.profileStatus === "VERIFIED") {
       return res.status(StatusCodes.BAD_REQUEST).json({
         success: false,
         message: "Profile verified. Therefore, couldn't be updated."
       });
-    };
+    }
+
+    // Handle file uploads
     if (files?.registrationDocument?.[0]) {
-      updateData.registrationDocument =
-        files.registrationDocument[0].path;
+      updateData.registrationDocument = files.registrationDocument[0].path;
     }
 
     if (files?.taxDocument?.[0]) {
@@ -1439,6 +1439,7 @@ export const updateMerchantData = async (req: Request, res: Response, next: Next
     if (files?.identityDocument?.[0]) {
       updateData.identityDocument = files.identityDocument[0].path;
     }
+
     if (files?.businessLogo?.[0]) {
       updateData.businessLogo = files.businessLogo[0].path;
     }
@@ -1452,24 +1453,27 @@ export const updateMerchantData = async (req: Request, res: Response, next: Next
     updateData.profileStatus = "PENDING_VERIFICATION";
 
     const updateMerchant = await prisma.merchantProfile.update({
-      where:{
+      where: {
         userId: id
       },
       data: updateData
-    })
-    if (!updateMerchant){
+    });
+
+    if (!updateMerchant) {
       return res.status(StatusCodes.BAD_REQUEST).json({
-        success: true,
+        success: false,
         message: "Your profile couldn't be updated"
       });
     }
-    return res.status(StatusCodes.OK).json(successResponse("Profile updated successfully", updateMerchant))
+
+    return res.status(StatusCodes.OK).json(
+      successResponse("Profile updated successfully", updateMerchant)
+    );
 
   } catch (error: any) {
-      next(error);
+    next(error);
   }
 }
-
 
 export const getGiftCardByMerchant = async (
   req: Request,

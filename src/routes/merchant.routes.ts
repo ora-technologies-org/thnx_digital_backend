@@ -29,7 +29,7 @@ import {
 import { uploadMerchantDocs } from "../utils/multer";
 import { updateProfile } from "../controllers/admin.controller";
 import { queryValidation, validate } from "../middleware/validation.middleware";
-import { adminCreateMerchantSchema } from "../validators/auth.validator";
+import { adminCreateMerchantSchema, adminUpdateMerchantSchema, updateMerchantDataSchema } from "../validators/auth.validator";
 import { createSupportTicketSchema, merchantVerifySchema, updateSupportTicketSchema } from "../validators/user.validator";
 import { getMerchantDashboardStats } from "../controllers/analytics.controller";
 import { getMerchantsQuerySchema, getPendingMerchantsQuerySchema, getPurchaseOrdersQuerySchema, getSupportTicketsQuerySchema, getVerifiedMerchantsQuerySchema } from "../validators/query.validators";
@@ -530,8 +530,8 @@ router.delete(
   deleteMerchant
 );
 
-router.put("/", authenticate, authorize("MERCHANT"), uploadMerchantDocs, updateMerchantData);
-router.put("/:merchantId", authenticate, authorize("ADMIN"), uploadMerchantDocs, adminUpdateMerchant);
+router.put("/", authenticate, authorize("MERCHANT"), uploadMerchantDocs, validate(updateMerchantDataSchema), updateMerchantData);
+router.put("/:merchantId", authenticate, authorize("ADMIN"), uploadMerchantDocs, validate(adminUpdateMerchantSchema), adminUpdateMerchant);
 
 
 // router.get("/:merchantId", authenticate, authorize("ADMIN"), getMerchantById);
