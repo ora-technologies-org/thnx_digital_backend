@@ -179,7 +179,7 @@ router.post("/login", login);
  *             schema:
  *               $ref: '#/components/schemas/ErrorResponse'
  */
-router.post("/refresh", refreshToken);
+router.post("/refresh", authenticate, refreshToken);
 
 /**
  * @swagger

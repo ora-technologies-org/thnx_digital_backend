@@ -5,12 +5,16 @@ import {
   completeProfileSchema,
   merchantQuickRegisterSchema,
 } from "../validators/auth.validator";
-import { AuthenticatedRequest } from "./auth.controller";
+import { AuthenticatedRequest, refreshToken } from "./auth.controller";
 import bcrypt from "bcrypt";
 import { generateTokens } from "../utils/jwt.util";
 import { ActivityLogger } from "../services/activityLog.service";
 import { EmailService } from "../services/email.service";
 import notificationService from "../services/notification.service";
+import { resolveSoa } from "dns";
+import { STATUS_CODES } from "../utils/status_code";
+import { hashedRefreshToken } from "../utils/hashingTokens.util";
+
 /**
  * @route   POST /api/auth/merchant/register
  * @desc    Quick merchant registration (Step 1 - Minimal info)
@@ -84,13 +88,17 @@ export const merchantRegister = async (req: Request, res: Response) => {
     const expiresAt = new Date();
     expiresAt.setDate(expiresAt.getDate() + 7);
 
-    await prisma.refreshToken.create({
+    const hashRefreshToken = await hashedRefreshToken(tokens.refreshToken)
+
+   const createRefreshtoken =  await prisma.refreshToken.create({
       data: {
-        token: tokens.refreshToken,
+        token: hashRefreshToken,
         userId: user.id,
         expiresAt,
       },
     });
+
+    console.log(createRefreshtoken);
 
     return res.status(201).json({
       success: true,

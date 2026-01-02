@@ -1,4 +1,4 @@
-import { Request, Response } from "express";
+import { Request, Response, urlencoded } from "express";
 import bcrypt from "bcrypt";
 import { PrismaClient } from "@prisma/client";
 import { changePasswordSchema, loginSchema } from "../validators/auth.validator";
@@ -7,6 +7,10 @@ import { sendForgotPasswordOTP } from "../utils/email.util";
 import { otpGenerator } from "../helpers/otp/otpGenerator";
 import { ClientAuthentication, OAuth2Client } from "google-auth-library";
 import { ActivityLogger } from "../services/activityLog.service";
+import { STATUS_CODES } from "../utils/status_code";
+import { compareRefreshToken, hashedRefreshToken } from "../utils/hashingTokens.util";
+import { doesNotMatch } from "assert";
+import { decode } from "punycode";
 
 const prisma = new PrismaClient();
 const googleVerification = new OAuth2Client(process.env.GOOGLE_CLIENT_ID);
@@ -94,14 +98,18 @@ export const login = async (req: Request, res: Response) => {
 
     const expiresAt = new Date();
     expiresAt.setDate(expiresAt.getDate() + 7);
+    
+    const hashRefreshToken = await hashedRefreshToken(tokens.refreshToken);    
 
-    await prisma.refreshToken.create({
+    const createRefreshtoken = await prisma.refreshToken.create({
       data: {
-        token: tokens.refreshToken,
+        token: hashRefreshToken,
         userId: user.id,
         expiresAt,
       },
     });
+
+    console.log(createRefreshtoken);
 
     await prisma.user.update({
       where: { id: user.id },
@@ -123,7 +131,7 @@ export const login = async (req: Request, res: Response) => {
           profileStatus,
           isVerified: user.merchantProfile?.isVerified || false,
         },
-        tokens,
+        tokens
       },
     });
   } catch (error: any) {
@@ -220,14 +228,18 @@ export const googleLogin = async (req: Request, res: Response) => {
       profileStatus,
     });
 
+    const hashToken = await hashedRefreshToken(tokens.refreshToken);
 
-    await prisma.refreshToken.create({
+    const createRefreshtoken = await prisma.refreshToken.create({
       data: {
         userId: user.id,
-        token: tokens.refreshToken,
+        token: hashToken,
         expiresAt,
       },
     });
+
+    console.log(createRefreshtoken);
+    
 
     return res.status(200).json({
       success: true,
@@ -263,18 +275,19 @@ export const googleLogin = async (req: Request, res: Response) => {
 export const refreshToken = async (req: Request, res: Response) => {
   try {
     const { refreshToken } = req.body;
+    const userId = req.authUser?.userId;
 
     if (!refreshToken) {
       return res.status(400).json({
         success: false,
-        message: "Refresh token is required",
+        message: "Refresh token is required to continue the session.",
       });
-    }
-
+    };
+    
     const decoded = verifyRefreshToken(refreshToken);
 
-    const storedToken = await prisma.refreshToken.findUnique({
-      where: { token: refreshToken },
+    const storedToken = await prisma.refreshToken.findMany({
+      where: { userId: userId },
       include: {
         user: {
           include: {
@@ -290,15 +303,41 @@ export const refreshToken = async (req: Request, res: Response) => {
     });
 
     if (!storedToken) {
-      return res.status(401).json({
+      return res.status(STATUS_CODES.NOT_FOUND).json({
         success: false,
-        message: "Invalid refresh token",
+        message: "No active token found. Please log in again.",
       });
     }
 
-    if (new Date() > storedToken.expiresAt) {
+    let matchedToken;
+
+    for (const dbToken of storedToken) {
+      if (await compareRefreshToken(refreshToken, dbToken.token)) {
+        matchedToken = dbToken;
+        break;
+      }
+    }
+
+    if (!matchedToken){
+      return res.status(STATUS_CODES.UNAUTHORIZED).json({
+        success: false,
+        message: "Token is no longer valid. Please log in again."
+      })
+    }
+
+
+    const compareToken = await compareRefreshToken(refreshToken, matchedToken?.token);
+  
+    if (!compareToken){
+      return res.status(STATUS_CODES.UNAUTHORIZED).json({
+        success: false,
+        message: "The provided token does not match."
+      });
+    }
+
+    if (new Date() > matchedToken.expiresAt) {
       await prisma.refreshToken.delete({
-        where: { id: storedToken.id },
+        where: { id: matchedToken.id },
       });
 
       return res.status(401).json({
@@ -308,24 +347,26 @@ export const refreshToken = async (req: Request, res: Response) => {
     }
 
     const tokens = generateTokens({
-      userId: storedToken.user.id,
-      email: storedToken.user.email,
-      role: storedToken.user.role,
-      isVerified: storedToken.user.merchantProfile?.isVerified || false,
-      profileStatus: storedToken.user.merchantProfile?.profileStatus,
+      userId: matchedToken.user.id,
+      email: matchedToken.user.email,
+      role: matchedToken.user.role,
+      isVerified: matchedToken.user.merchantProfile?.isVerified || false,
+      profileStatus: matchedToken.user.merchantProfile?.profileStatus,
     });
 
     await prisma.refreshToken.delete({
-      where: { id: storedToken.id },
+      where: { id: matchedToken.id },
     });
 
     const expiresAt = new Date();
     expiresAt.setDate(expiresAt.getDate() + 7);
 
+    const tokenHash = await hashedRefreshToken(tokens.refreshToken);
+
     await prisma.refreshToken.create({
       data: {
-        token: tokens.refreshToken,
-        userId: storedToken.user.id,
+        token: tokenHash,
+        userId: matchedToken.user.id,
         expiresAt,
       },
     });
@@ -334,7 +375,7 @@ export const refreshToken = async (req: Request, res: Response) => {
       success: true,
       message: "Token refreshed successfully",
       data: {
-        tokens,
+        tokens
       },
     });
   } catch (error: any) {
@@ -487,6 +528,7 @@ export const getOtp = async(req: Request, res: Response) => {
       });
     }
     const userOtp = await otpGenerator(3);
+    const hashOTP = await bcrypt.hash(userOtp.otp, 10);
     try {
       const sendOtp = await sendForgotPasswordOTP(
         user.email,
@@ -502,7 +544,7 @@ export const getOtp = async(req: Request, res: Response) => {
     const seedOtp = await prisma.changePassword.create({
       data:{
         userId: user.id,
-        otpToken: userOtp.otp,
+        otpToken: hashOTP,
         otpExpiry: userOtp.otpExpiry,
         used: false
       }
@@ -555,19 +597,31 @@ export const verifyOtp = async (req: Request, res: Response) => {
       },orderBy:{
         createdAt: "desc"
       }
-    })
+    });
+    
     if (!userOtp){
       return res.status(404).json({
         success: false,
         message: "OTP not found. Please request a new one."
       })
     }
-    if (userOtp?.otpToken !== otp){
+
+    if (userOtp.used === true){
+      return res.status(STATUS_CODES.BAD_REQUEST).json({
+        success: false,
+        message: "The provided OTP has been already used."
+      });
+    }
+
+    const compareOTP = await bcrypt.compare(otp, userOtp.otpToken);
+
+    if (!compareOTP){
       return res.status(400).json({
         success: false, 
         message: "The provided OTP is invalid."
       });
     }
+
     if (userOtp?.otpExpiry! < new Date() ){
       return res.status(400).json({
         success: false,
@@ -628,13 +682,30 @@ export const changePassword =  async (req: Request, res: Response) => {
       orderBy:{
         createdAt: "desc"
       }
-    })
-    if (otp !== otpDetails?.otpToken){
+    });
+
+    if (!otpDetails){
+      return res.status(STATUS_CODES.NOT_FOUND).json({
+        success: false,
+        message: "OTP details not found with given email."
+      });
+    }
+
+    if (otpDetails.used === true){
+      return res.status(STATUS_CODES.BAD_REQUEST).json({
+        success: false,
+        message: "The provided OTP has been already used."
+      });
+    };
+
+    const compareOTP = await bcrypt.compare(otp, otpDetails?.otpToken);
+
+    if (!compareOTP){
       return res.status(400).json({
         success: false,
         otp: "The provided OTP is invalid."
       });
-    }
+    };
 
     if (otpDetails?.otpExpiry! < new Date() ){
       return res.status(400).json({
@@ -657,7 +728,7 @@ export const changePassword =  async (req: Request, res: Response) => {
         email
       },
       data:{
-        password: hashPassword
+        password: hashPassword,
       }
     });
     if (!updatePassword){
@@ -666,6 +737,13 @@ export const changePassword =  async (req: Request, res: Response) => {
         message: "Failed to update password. Please try again."
       });
     }
+    const used = await prisma.changePassword.update({
+      where:{
+        id: otpDetails.id
+      },data:{
+        used: true
+      }
+    });
     return res.status(200).json({
       success: true,
       message: "Password has been updated successfully."
