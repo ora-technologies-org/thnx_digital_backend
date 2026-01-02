@@ -5,12 +5,16 @@ import {
   completeProfileSchema,
   merchantQuickRegisterSchema,
 } from "../validators/auth.validator";
-import { AuthenticatedRequest } from "./auth.controller";
+import { AuthenticatedRequest, refreshToken } from "./auth.controller";
 import bcrypt from "bcrypt";
 import { generateTokens } from "../utils/jwt.util";
 import { ActivityLogger } from "../services/activityLog.service";
 import { EmailService } from "../services/email.service";
 import notificationService from "../services/notification.service";
+import { resolveSoa } from "dns";
+import { STATUS_CODES } from "../utils/status_code";
+import { hashedRefreshToken } from "../utils/hashingTokens.util";
+
 /**
  * @route   POST /api/auth/merchant/register
  * @desc    Quick merchant registration (Step 1 - Minimal info)
@@ -46,14 +50,14 @@ export const merchantRegister = async (req: Request, res: Response) => {
         },
       });
 
-      await tx.merchantProfile.create({
-        data: {
-          userId: newUser.id,
-          businessName: validatedData.businessName,
-          profileStatus: "INCOMPLETE",
-          isVerified: false,
-        },
-      });
+      // await tx.merchantProfile.create({
+      //   data: {
+      //     userId: newUser.id,
+      //     businessName: validatedData.businessName,
+      //     profileStatus: "INCOMPLETE",
+      //     isVerified: false,
+      //   },
+      // });
 
       return newUser;
     });
@@ -62,7 +66,7 @@ export const merchantRegister = async (req: Request, res: Response) => {
 
       await notificationService.onMerchantRegistered(
       user.id,
-      user.name || validatedData.businessName
+      user.name || validatedData.name
     );
 
 
@@ -71,7 +75,6 @@ export const merchantRegister = async (req: Request, res: Response) => {
       user.email,
       user.name || "Merchant",
       validatedData.password, // Send original password (before hashing)
-      validatedData.businessName,
     );
 
     const tokens = generateTokens({
@@ -85,13 +88,16 @@ export const merchantRegister = async (req: Request, res: Response) => {
     const expiresAt = new Date();
     expiresAt.setDate(expiresAt.getDate() + 7);
 
-    await prisma.refreshToken.create({
+    const hashRefreshToken = await hashedRefreshToken(tokens.refreshToken)
+
+   const createRefreshtoken =  await prisma.refreshToken.create({
       data: {
-        token: tokens.refreshToken,
+        token: hashRefreshToken,
         userId: user.id,
         expiresAt,
       },
     });
+
 
     return res.status(201).json({
       success: true,
@@ -110,7 +116,7 @@ export const merchantRegister = async (req: Request, res: Response) => {
     });
   } catch (error: any) {
     console.error("Merchant registration error:", error);
-
+    
     if (error.name === "ZodError") {
       return res.status(400).json({
         success: false,
@@ -122,7 +128,6 @@ export const merchantRegister = async (req: Request, res: Response) => {
     return res.status(500).json({
       success: false,
       message: "Internal server error",
-      error: error.message,
     });
   }
 };
@@ -152,30 +157,24 @@ export const completeProfile = async (req: Request, res: Response) => {
       });
     }
 
-    const existingProfile = await prisma.merchantProfile.findUnique({
-      where: { userId },
-    });
-
-    if (!existingProfile) {
-      return res.status(404).json({
-        success: false,
-        message: "Merchant profile not found",
-      });
-    }
-
-    if (existingProfile.profileStatus === "VERIFIED") {
+    const merchant = await prisma.merchantProfile.findUnique({
+      where:{
+        userId: userId
+      }
+    }); 
+    if (merchant?.profileStatus === "VERIFIED"){
       return res.status(400).json({
         success: false,
-        message: "Profile is already verified. Contact admin for changes.",
-      });
+        message: "Profile already verified."
+      })
     }
 
     const validatedData = completeProfileSchema.parse(req.body);
 
-    if (!files?.identityDocument) {
+    if (!files?.identityDocument || !files.registrationDocument || !files.taxDocument){
       return res.status(400).json({
         success: false,
-        message: "Identity document is required",
+        message: "Identity document, Registration document and Tax document are required.",
       });
     }
 
@@ -185,46 +184,48 @@ export const completeProfile = async (req: Request, res: Response) => {
       identityDocument: files?.identityDocument?.[0]?.path,
       additionalDocuments: files?.additionalDocuments?.map((f) => f.path) || [],
     };
-
-    const updatedProfile = await prisma.merchantProfile.update({
-      where: { userId },
-      data: {
-        businessRegistrationNumber: validatedData.businessRegistrationNumber,
-        taxId: validatedData.taxId,
-        businessType: validatedData.businessType,
-        businessCategory: validatedData.businessCategory,
-        address: validatedData.address,
-        city: validatedData.city,
-        state: validatedData.state,
-        zipCode: validatedData.zipCode,
-        country: validatedData.country,
-        businessPhone: validatedData.businessPhone,
-        businessEmail: validatedData.businessEmail,
-        website: validatedData.website,
-        description: validatedData.description,
-        bankName: validatedData.bankName,
-        accountNumber: validatedData.accountNumber,
-        accountHolderName: validatedData.accountHolderName,
-        ifscCode: validatedData.ifscCode,
-        swiftCode: validatedData.swiftCode,
-        registrationDocument: documentData.registrationDocument,
-        taxDocument: documentData.taxDocument,
-        identityDocument: documentData.identityDocument,
-        additionalDocuments: documentData.additionalDocuments,
-        profileStatus: "PENDING_VERIFICATION",
-      },
-      include: {
-        user: {
-          select: {
-            id: true,
-            email: true,
-            name: true,
-            role: true,
-          },
-        },
-      },
-    });
-
+      const updatedProfile = await prisma.$transaction(async (tx)=> {
+          return await tx.merchantProfile.create({
+            data: {
+              businessName: validatedData.businessName!,
+              businessRegistrationNumber: validatedData.businessRegistrationNumber,
+              taxId: validatedData.taxId,
+              businessType: validatedData.businessType,
+              businessCategory: validatedData.businessCategory,
+              address: validatedData.address,
+              city: validatedData.city,
+              state: validatedData.state,
+              zipCode: validatedData.zipCode,
+              country: validatedData.country,
+              businessPhone: validatedData.businessPhone,
+              businessEmail: validatedData.businessEmail,
+              website: validatedData.website,
+              description: validatedData.description,
+              bankName: validatedData.bankName,
+              accountNumber: validatedData.accountNumber,
+              accountHolderName: validatedData.accountHolderName,
+              ifscCode: validatedData.ifscCode,
+              swiftCode: validatedData.swiftCode,
+              registrationDocument: documentData.registrationDocument,
+              taxDocument: documentData.taxDocument,
+              identityDocument: documentData.identityDocument,
+              additionalDocuments: documentData.additionalDocuments,
+              profileStatus: "PENDING_VERIFICATION",
+              userId: userId
+            },
+            include: {
+              user: {
+                select: {
+                  id: true,
+                  email: true,
+                  name: true,
+                  role: true,
+                },
+              },
+            },
+        });
+      }) 
+      
     ActivityLogger.merchantProfileUpdated(
       updatedProfile.id,
       userId,
@@ -277,7 +278,6 @@ export const completeProfile = async (req: Request, res: Response) => {
     return res.status(500).json({
       success: false,
       message: "Internal server error",
-      error: error.message,
     });
   }
 };
@@ -378,7 +378,6 @@ export const getMerchantProfile = async (req: Request, res: Response) => {
     return res.status(500).json({
       success: false,
       message: "Error fetching merchant profile",
-      error: error.message,
     });
   }
 };
@@ -550,7 +549,6 @@ export const resubmitProfile = async (req: Request, res: Response) => {
     return res.status(500).json({
       success: false,
       message: "Error resubmitting profile",
-      error: error.message,
     });
   }
 };
@@ -626,7 +624,6 @@ export const updateMerchantProfile = async (req: Request, res: Response) => {
     return res.status(500).json({
       success: false,
       message: "Error updating profile",
-      error: error.message,
     });
   }
 };
@@ -724,7 +721,6 @@ export const adminCreateMerchant = async (req: Request, res: Response) => {
       result.user.email,
       result.user.name || "Merchant",
       validatedData.password,
-      validatedData.businessName,
     );
 
     return res.status(201).json({
@@ -753,7 +749,6 @@ export const adminCreateMerchant = async (req: Request, res: Response) => {
     return res.status(500).json({
       success: false,
       message: "Internal server error",
-      error: error.message,
     });
   }
 };
@@ -798,7 +793,6 @@ export const getPendingMerchants = async (req: Request, res: Response) => {
     return res.status(500).json({
       success: false,
       message: "Error fetching pending merchants",
-      error: error.message,
     });
   }
 };
@@ -916,7 +910,6 @@ export const verifyMerchant = async (req: Request, res: Response) => {
     return res.status(500).json({
       success: false,
       message: "Error verifying merchant",
-      error: error.message,
     });
   }
 };
@@ -958,7 +951,6 @@ export const getAllMerchants = async (req: Request, res: Response) => {
     return res.status(500).json({
       success: false,
       message: "Error fetching merchants",
-      error: error.message,
     });
   }
 };
@@ -1062,7 +1054,6 @@ export const deleteMerchant = async (req: Request, res: Response) => {
     return res.status(500).json({
       success: false,
       message: "Error deleting merchant",
-      error: error.message,
     });
   }
 };
