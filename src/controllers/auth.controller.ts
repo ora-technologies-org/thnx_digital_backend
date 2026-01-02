@@ -148,7 +148,6 @@ export const login = async (req: Request, res: Response) => {
     return res.status(500).json({
       success: false,
       message: "Internal server error",
-      error: error.message,
     });
   }
 };
@@ -261,7 +260,6 @@ export const googleLogin = async (req: Request, res: Response) => {
     return res.status(500).json({
       success: false,
       message: "Google signup/login failed",
-      error: error.message,
     });
   }
 };
@@ -383,7 +381,6 @@ export const refreshToken = async (req: Request, res: Response) => {
     return res.status(401).json({
       success: false,
       message: "Invalid or expired refresh token",
-      error: error.message,
     });
   }
 };
@@ -428,7 +425,6 @@ export const logout = async (req: Request, res: Response) => {
     return res.status(500).json({
       success: false,
       message: "Error during logout",
-      error: error.message,
     });
   }
 };
@@ -502,7 +498,6 @@ export const getCurrentUser = async (req: Request, res: Response) => {
     return res.status(500).json({
       success: false,
       message: "Error fetching user data",
-      error: error.message,
     });
   }
 };
@@ -564,7 +559,6 @@ export const getOtp = async(req: Request, res: Response) => {
     return res.status(500).json({
       success: false,
       message: "An error occurred while processing your request.",
-      error: error.message,
     });
   }
 }
@@ -636,7 +630,6 @@ export const verifyOtp = async (req: Request, res: Response) => {
     return res.status(500).json({
       success: false,
       message: "An error occurred while verifying the OTP.",
-      error: error.message
     })
   }
 }
@@ -744,6 +737,13 @@ export const changePassword =  async (req: Request, res: Response) => {
         used: true
       }
     });
+
+    const revokeRefreshToken = await prisma.refreshToken.deleteMany({
+      where:{
+        userId: user.id
+      }
+    });
+
     return res.status(200).json({
       success: true,
       message: "Password has been updated successfully."
@@ -753,7 +753,6 @@ export const changePassword =  async (req: Request, res: Response) => {
     return res.status(500).json({
       success: false,
       message: "An error occurred while changing the password.",
-      error: error.message
     })
   }
 }

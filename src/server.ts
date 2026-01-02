@@ -26,12 +26,19 @@ import serverAdapter from './config/bullBoard.config';
 
 import { initializeSocket } from './config/socket.config';
 import { scheduleNotificationCleanup } from './queues/notification.queue';
+import rateLimit from 'express-rate-limit';
 
 dotenv.config();
 
 const app = express();
 const httpServer = createServer(app);
 const PORT = process.env.PORT || 3000;
+const limiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 100,
+  standardHeaders: true,
+  legacyHeaders: false
+});
 
 const io = initializeSocket(httpServer);
 
@@ -75,7 +82,7 @@ const corsOptions = {
 };
 
 app.use(cors(corsOptions));
-
+app.use("/api", limiter);
 // Middleware
 app.use(express.json({ limit: '50mb' }));
 app.use(express.urlencoded({ limit: '50mb', extended: true }));

@@ -121,7 +121,6 @@ export const createGiftCard = async (req: Request, res: Response) => {
     return res.status(500).json({
       success: false,
       message: 'Internal server error',
-      error: error.message,
     });
   }
 };
@@ -185,7 +184,6 @@ export const getMyGiftCards = async (req: Request, res: Response) => {
     return res.status(500).json({
       success: false,
       message: 'Internal server error',
-      error: error.message,
     });
   }
 };
@@ -264,7 +262,6 @@ export const getGiftCardById = async (req: Request, res: Response) => {
     return res.status(500).json({
       success: false,
       message: 'Internal server error',
-      error: error.message,
     });
   }
 };
@@ -395,7 +392,6 @@ export const updateGiftCard = async (req: Request, res: Response) => {
     return res.status(500).json({
       success: false,
       message: 'Internal server error',
-      error: error.message,
     });
   }
 };
@@ -498,7 +494,6 @@ export const deleteGiftCard = async (req: Request, res: Response) => {
     return res.status(500).json({
       success: false,
       message: 'Internal server error',
-      error: error.message,
     });
   }
 };
@@ -549,7 +544,6 @@ export const getActiveGiftCards = async (req: Request, res: Response) => {
     return res.status(500).json({
       success: false,
       message: 'Internal server error',
-      error: error.message,
     });
   }
 };

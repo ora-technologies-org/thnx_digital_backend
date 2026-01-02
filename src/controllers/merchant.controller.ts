@@ -98,7 +98,6 @@ export const merchantRegister = async (req: Request, res: Response) => {
       },
     });
 
-    console.log(createRefreshtoken);
 
     return res.status(201).json({
       success: true,
@@ -129,7 +128,6 @@ export const merchantRegister = async (req: Request, res: Response) => {
     return res.status(500).json({
       success: false,
       message: "Internal server error",
-      error: error.message,
     });
   }
 };
@@ -173,10 +171,10 @@ export const completeProfile = async (req: Request, res: Response) => {
 
     const validatedData = completeProfileSchema.parse(req.body);
 
-    if (!files?.identityDocument) {
+    if (!files?.identityDocument || !files.registrationDocument || !files.taxDocument){
       return res.status(400).json({
         success: false,
-        message: "Identity document is required",
+        message: "Identity document, Registration document and Tax document are required.",
       });
     }
 
@@ -186,47 +184,48 @@ export const completeProfile = async (req: Request, res: Response) => {
       identityDocument: files?.identityDocument?.[0]?.path,
       additionalDocuments: files?.additionalDocuments?.map((f) => f.path) || [],
     };
-
-    const updatedProfile = await prisma.merchantProfile.create({
-      data: {
-        businessName: validatedData.businessName!,
-        businessRegistrationNumber: validatedData.businessRegistrationNumber,
-        taxId: validatedData.taxId,
-        businessType: validatedData.businessType,
-        businessCategory: validatedData.businessCategory,
-        address: validatedData.address,
-        city: validatedData.city,
-        state: validatedData.state,
-        zipCode: validatedData.zipCode,
-        country: validatedData.country,
-        businessPhone: validatedData.businessPhone,
-        businessEmail: validatedData.businessEmail,
-        website: validatedData.website,
-        description: validatedData.description,
-        bankName: validatedData.bankName,
-        accountNumber: validatedData.accountNumber,
-        accountHolderName: validatedData.accountHolderName,
-        ifscCode: validatedData.ifscCode,
-        swiftCode: validatedData.swiftCode,
-        registrationDocument: documentData.registrationDocument,
-        taxDocument: documentData.taxDocument,
-        identityDocument: documentData.identityDocument,
-        additionalDocuments: documentData.additionalDocuments,
-        profileStatus: "PENDING_VERIFICATION",
-        userId: userId
-      },
-      include: {
-        user: {
-          select: {
-            id: true,
-            email: true,
-            name: true,
-            role: true,
-          },
-        },
-      },
-    });
-
+      const updatedProfile = await prisma.$transaction(async (tx)=> {
+          return await tx.merchantProfile.create({
+            data: {
+              businessName: validatedData.businessName!,
+              businessRegistrationNumber: validatedData.businessRegistrationNumber,
+              taxId: validatedData.taxId,
+              businessType: validatedData.businessType,
+              businessCategory: validatedData.businessCategory,
+              address: validatedData.address,
+              city: validatedData.city,
+              state: validatedData.state,
+              zipCode: validatedData.zipCode,
+              country: validatedData.country,
+              businessPhone: validatedData.businessPhone,
+              businessEmail: validatedData.businessEmail,
+              website: validatedData.website,
+              description: validatedData.description,
+              bankName: validatedData.bankName,
+              accountNumber: validatedData.accountNumber,
+              accountHolderName: validatedData.accountHolderName,
+              ifscCode: validatedData.ifscCode,
+              swiftCode: validatedData.swiftCode,
+              registrationDocument: documentData.registrationDocument,
+              taxDocument: documentData.taxDocument,
+              identityDocument: documentData.identityDocument,
+              additionalDocuments: documentData.additionalDocuments,
+              profileStatus: "PENDING_VERIFICATION",
+              userId: userId
+            },
+            include: {
+              user: {
+                select: {
+                  id: true,
+                  email: true,
+                  name: true,
+                  role: true,
+                },
+              },
+            },
+        });
+      }) 
+      
     ActivityLogger.merchantProfileUpdated(
       updatedProfile.id,
       userId,
@@ -279,7 +278,6 @@ export const completeProfile = async (req: Request, res: Response) => {
     return res.status(500).json({
       success: false,
       message: "Internal server error",
-      error: error.message,
     });
   }
 };
@@ -380,7 +378,6 @@ export const getMerchantProfile = async (req: Request, res: Response) => {
     return res.status(500).json({
       success: false,
       message: "Error fetching merchant profile",
-      error: error.message,
     });
   }
 };
@@ -552,7 +549,6 @@ export const resubmitProfile = async (req: Request, res: Response) => {
     return res.status(500).json({
       success: false,
       message: "Error resubmitting profile",
-      error: error.message,
     });
   }
 };
@@ -628,7 +624,6 @@ export const updateMerchantProfile = async (req: Request, res: Response) => {
     return res.status(500).json({
       success: false,
       message: "Error updating profile",
-      error: error.message,
     });
   }
 };
@@ -754,7 +749,6 @@ export const adminCreateMerchant = async (req: Request, res: Response) => {
     return res.status(500).json({
       success: false,
       message: "Internal server error",
-      error: error.message,
     });
   }
 };
@@ -799,7 +793,6 @@ export const getPendingMerchants = async (req: Request, res: Response) => {
     return res.status(500).json({
       success: false,
       message: "Error fetching pending merchants",
-      error: error.message,
     });
   }
 };
@@ -917,7 +910,6 @@ export const verifyMerchant = async (req: Request, res: Response) => {
     return res.status(500).json({
       success: false,
       message: "Error verifying merchant",
-      error: error.message,
     });
   }
 };
@@ -959,7 +951,6 @@ export const getAllMerchants = async (req: Request, res: Response) => {
     return res.status(500).json({
       success: false,
       message: "Error fetching merchants",
-      error: error.message,
     });
   }
 };
@@ -1063,7 +1054,6 @@ export const deleteMerchant = async (req: Request, res: Response) => {
     return res.status(500).json({
       success: false,
       message: "Error deleting merchant",
-      error: error.message,
     });
   }
 };

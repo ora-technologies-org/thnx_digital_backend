@@ -21,7 +21,7 @@ export const merchantQuickRegisterSchema = z.object({
 export const completeProfileSchema = z.object({
   // Business Information
   businessName: z.string(),
-  businessRegistrationNumber: z.string().optional(),
+  businessRegistrationNumber: z.string(),
   taxId: z.string().optional(),
   businessType: z.string().optional(),
   businessCategory: z.string().optional(),
