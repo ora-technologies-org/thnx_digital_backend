@@ -519,7 +519,7 @@ export const getOtp = async(req: Request, res: Response) => {
     if (!user){
       return res.status(404).json({
         success: false,
-        message: "No user found with the provided email."
+        message: "If an account exists, an OTP has been sent."
       });
     }
     const userOtp = await otpGenerator(3);
@@ -581,7 +581,7 @@ export const verifyOtp = async (req: Request, res: Response) => {
     if (!user){
       return res.status(404).json({
         success: false,
-        message: "No user found with the provided email."
+        message: "If an account exists, an OTP has been sent."
       });
     }
 
@@ -665,7 +665,7 @@ export const changePassword =  async (req: Request, res: Response) => {
     if (!user){
       return res.status(400).json({
         success: false,
-        message: "No user found with the provided email."
+        message: "If an account exists, an OTP has been sent."
       })
     }
     const otpDetails = await prisma.changePassword.findFirst({
