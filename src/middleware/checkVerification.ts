@@ -13,7 +13,6 @@ export const requireVerifiedMerchant = async (req: Request, res: Response, next:
     if (req.authUser?.role !== 'MERCHANT') {
       return next();
     }
-    // if (req.authUser.profileStatus)
 
     const merchantProfile = await prisma.merchantProfile.findUnique({
       where: { userId: req.authUser.userId },
