@@ -6,7 +6,7 @@ export const EmailService = {
   sendWelcomeEmail: (
     to: string,
     name: string,
-    password: string,
+    password?: string,
   ): void => {
     emailQueue.add('welcome', {
       type: 'welcome_email',

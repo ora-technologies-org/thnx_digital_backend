@@ -5,7 +5,7 @@ import { changePasswordSchema, loginSchema } from "../validators/auth.validator"
 import { generateTokens, verifyRefreshToken } from "../utils/jwt.util";
 import { sendForgotPasswordOTP } from "../utils/email.util";
 import { otpGenerator } from "../helpers/otp/otpGenerator";
-import { ClientAuthentication, OAuth2Client } from "google-auth-library";
+import { OAuth2Client } from "google-auth-library";
 import { ActivityLogger } from "../services/activityLog.service";
 
 const prisma = new PrismaClient();
@@ -171,6 +171,7 @@ export const googleLogin = async (req: Request, res: Response) => {
       });
     }
 
+
     const { email, name, picture, sub: googleId } = payload;
 
     let user = await prisma.user.findUnique({
@@ -206,6 +207,12 @@ export const googleLogin = async (req: Request, res: Response) => {
         },
         include: { merchantProfile: true },
       });
+      if (user.isActive === false){
+        return res.status(400).json({
+          success: false,
+          message: "Your account has been deactivated. Please contact support."
+        })
+      }
     }
 
     const profileStatus =
@@ -228,6 +235,7 @@ export const googleLogin = async (req: Request, res: Response) => {
         expiresAt,
       },
     });
+
 
     return res.status(200).json({
       success: true,
@@ -288,6 +296,13 @@ export const refreshToken = async (req: Request, res: Response) => {
         },
       },
     });
+    
+    if (storedToken?.user.isActive === false){
+      return res.status(400).json({
+        success: false,
+        message: "User is deactivated, therefore couldn't rotate token."
+      })
+    }
 
     if (!storedToken) {
       return res.status(401).json({

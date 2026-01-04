@@ -70,7 +70,6 @@ export const merchantRegister = async (req: Request, res: Response) => {
     EmailService.sendWelcomeEmail(
       user.email,
       user.name || "Merchant",
-      validatedData.password, // Send original password (before hashing)
     );
 
     const tokens = generateTokens({

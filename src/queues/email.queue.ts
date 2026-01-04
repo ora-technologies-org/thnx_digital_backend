@@ -24,7 +24,7 @@ export interface BaseEmailJobData {
 export interface WelcomeEmailData extends BaseEmailJobData {
   type: 'welcome_email';
   name: string;
-  password: string;
+  password?: string;
 }
 
 export interface GiftCardEmailData extends BaseEmailJobData {
@@ -121,8 +121,8 @@ export const emailWorker = new Worker<EmailJobData>(
               <div style="background-color: #f9f9f9; border: 1px solid #ddd; border-radius: 8px; padding: 20px; margin: 20px 0;">
                 <h3 style="margin-top: 0;">Your Login Credentials:</h3>
                 <p><strong>Email:</strong> ${to}</p>
-                <p><strong>Password:</strong> ${data.password}</p>
-                <p style="color: #e74c3c; font-size: 14px;">⚠️ Please change your password after first login!</p>
+                <p><strong>Password:</strong> ${data.password || "********"}</p>
+                <p style="color: #e74c3c; font-size: 14px;">⚠️ You can change your password after first login!</p>
               </div>
               
               <div style="text-align: center; margin: 30px 0;">
