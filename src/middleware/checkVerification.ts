@@ -3,24 +3,26 @@ import prisma from '../utils/prisma.util';
 
 export const requireVerifiedMerchant = async (req: Request, res: Response, next: NextFunction) => {
   try {
-    if (!req.user) {
-      return res.status(401).json({
-        success: false,
-        message: 'Unauthorized',
-      });
-    }
+    // if (!req.user) {
+    //   return res.status(401).json({
+    //     success: false,
+    //     message: 'Unauthorized',
+    //   });
+    // }
 
     if (req.authUser?.role !== 'MERCHANT') {
       return next();
     }
+    // if (req.authUser.profileStatus)
+
     const merchantProfile = await prisma.merchantProfile.findUnique({
       where: { userId: req.authUser.userId },
     });
     
     if (!merchantProfile) {
-      return res.status(404).json({
+      return res.status(403).json({
         success: false,
-        message: 'Merchant profile not found',
+        message: 'Access denied or not allowed',
       });
     }
     

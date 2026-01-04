@@ -149,7 +149,6 @@ export const login = async (req: Request, res: Response) => {
 export const googleLogin = async (req: Request, res: Response) => {
   try {
     const { credential } = req.body;
-
     if (!credential) {
       return res.status(400).json({
         success: false,
@@ -300,7 +299,7 @@ export const refreshToken = async (req: Request, res: Response) => {
     if (storedToken?.user.isActive === false){
       return res.status(400).json({
         success: false,
-        message: "User is deactivated, therefore couldn't rotate token."
+        message: "Your account has been deactivated. Contact support."
       })
     }
 
@@ -578,18 +577,20 @@ export const verifyOtp = async (req: Request, res: Response) => {
         message: "OTP not found, please try requesting for otp once again."
       })
     }
-    if (userOtp?.otpToken !== otp){
-      return res.status(400).json({
-        success: false, 
-        message: "The provided otp is invalid."
-      });
-    }
     if (userOtp?.otpExpiry! < new Date() ){
       return res.status(400).json({
         success: false,
         message: "The provided otp has been expired."
       })
     }
+
+    if (userOtp?.otpToken !== otp){
+      return res.status(400).json({
+        success: false, 
+        message: "The provided otp is invalid."
+      });
+    }
+    
     return res.status(200).json({
       success: true,
       message: "OTP has been verified successfully."
